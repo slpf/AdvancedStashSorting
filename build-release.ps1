@@ -52,7 +52,54 @@ if (!(Test-Path -LiteralPath $bepInExPath -PathType Container))
 
 New-Item -ItemType Directory -Path $distributionPath -Force | Out-Null
 $archivePath = Join-Path $distributionPath "AdvancedStashSorting-$version.zip"
-Compress-Archive -LiteralPath $bepInExPath -DestinationPath $archivePath -CompressionLevel Optimal -Force
+$archiveBasePath = Split-Path -Parent $bepInExPath
+$archiveBasePrefix = [System.IO.Path]::GetFullPath($archiveBasePath).TrimEnd('\', '/') +
+    [System.IO.Path]::DirectorySeparatorChar
+[System.IO.FileInfo[]]$files = @(Get-ChildItem -LiteralPath $bepInExPath -File -Recurse | Sort-Object FullName)
+
+if ($files.Count -eq 0)
+{
+    throw "Build output contains no files: $bepInExPath"
+}
+
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+$archiveStream = [System.IO.File]::Open(
+    $archivePath,
+    [System.IO.FileMode]::Create,
+    [System.IO.FileAccess]::Write,
+    [System.IO.FileShare]::None)
+$archive = $null
+
+try
+{
+    $archive = [System.IO.Compression.ZipArchive]::new(
+        $archiveStream,
+        [System.IO.Compression.ZipArchiveMode]::Create,
+        $false)
+
+    foreach ($file in $files)
+    {
+        [string]$fullPath = [System.IO.Path]::GetFullPath($file.FullName)
+        [string]$entryPath = $fullPath.Substring($archiveBasePrefix.Length).Replace('\', '/')
+
+        [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+            $archive,
+            $fullPath,
+            $entryPath,
+            [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
+    }
+}
+finally
+{
+    if ($null -ne $archive)
+    {
+        $archive.Dispose()
+    }
+
+    $archiveStream.Dispose()
+}
 
 if (!(Test-Path -LiteralPath $archivePath -PathType Leaf))
 {
