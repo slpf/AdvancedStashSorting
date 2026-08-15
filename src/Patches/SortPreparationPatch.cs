@@ -204,7 +204,7 @@ public class SortPreparationPatch : ModulePatch
             Item item = items[i];
 
             if (item.PinLockState != EItemPinLockState.Free || !ItemManipulator.CanFold(item, out FoldableComponent foldable) ||
-                foldable.Folded) continue;
+                foldable.Folded || HasContents(item) || ContainerCategorySettings.HasSelection(item.Id)) continue;
 
             OperationResult<FoldResult> operation = ItemManipulator.Fold(foldable, true, runNetworkTransactions);
 
@@ -315,6 +315,19 @@ public class SortPreparationPatch : ModulePatch
                 return null;
             }
         }
+    }
+    
+    private static bool HasContents(Item item)
+    {
+        if (item is not CompoundItem compoundItem) return false;
+
+        for (int i = 0; i < compoundItem.Grids.Length; i++)
+        {
+            foreach (Item _ in compoundItem.Grids[i].Items)
+                return true;
+        }
+
+        return false;
     }
 
     private static List<Item> GetGridItems(CompoundItem compoundItem)

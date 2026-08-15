@@ -89,7 +89,7 @@ public static class ContainerNesting
         foreach (Grid rootGrid in sortedItem.Grids)
         foreach (Item item in rootGrid.Items)
         {
-            if (item is not CompoundItem container || !CanUseAsTarget(container)) continue;
+            if (item is not CompoundItem container || !CanUseAsTarget(container) || IsFolded(container)) continue;
 
             for (int gridIndex = 0; gridIndex < container.Grids.Length; gridIndex++)
             {
@@ -106,6 +106,11 @@ public static class ContainerNesting
     private static bool CanUseAsTarget(CompoundItem container)
     {
         return CanConfigureCategories(container) && ContainerCategorySettings.HasSelection(container.Id);
+    }
+    
+    private static bool IsFolded(Item item)
+    {
+        return item.TryGetItemComponent(out FoldableComponent foldable) && foldable.Folded;
     }
 
     private static int CompareTargets(NestingTarget left, NestingTarget right)
