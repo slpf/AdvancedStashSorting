@@ -13,7 +13,7 @@ public static class StashItemSorter
     internal static bool CriteriaApplicationActive { get; private set; }
     internal static SortConfiguration ActiveSortConfiguration { get; private set; }
 
-    internal static OperationResult<ApplySortItemsPositionResult> Sort(CompoundItem sortedItem,
+    internal static GStruct154<ApplySortItemsPositionResult> Sort(CompoundItem sortedItem,
         InventoryController controller, SortConfiguration configuration)
     {
         if (configuration == null) throw new ArgumentNullException(nameof(configuration));
@@ -35,7 +35,7 @@ public static class StashItemSorter
             for (int i = 0; i < items.Count; i++)
             {
                 Item item = items[i];
-                OperationResult<ContainerRemoveResult> removeResult = item.Parent.Remove(item, false);
+                GStruct154<ContainerRemoveResult> removeResult = item.Parent.Remove(item, false);
 
                 if (removeResult.Failed)
                 {
@@ -71,7 +71,7 @@ public static class StashItemSorter
             for (int i = 0; i < searchResult.Plan.Placements.Count; i++)
             {
                 OrderedPlannedPlacement placement = searchResult.Plan.Placements[i];
-                OperationResult<GridAddResult> addResult = grid.Add(placement.Item, placement.Location, false);
+                GStruct154<GridAddResult> addResult = grid.Add(placement.Item, placement.Location, false);
 
                 if (addResult.Failed)
                 {
@@ -107,7 +107,7 @@ public static class StashItemSorter
         return items;
     }
 
-    internal static OperationResult<ApplySortItemsPositionResult> SortVanilla(CompoundItem sortedItem,
+    internal static GStruct154<ApplySortItemsPositionResult> SortVanilla(CompoundItem sortedItem,
         InventoryController controller, SortConfiguration configuration)
     {
         if (configuration == null) throw new ArgumentNullException(nameof(configuration));

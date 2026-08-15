@@ -39,7 +39,7 @@ public static class EditTagWindowPatch
     {
         protected override MethodBase GetTargetMethod()
         {
-            return AccessTools.DeclaredMethod(typeof(EditTagWindow), nameof(EditTagWindow.Save));
+            return AccessTools.DeclaredMethod(typeof(EditTagWindow), "method_4");
         }
 
         [PatchPrefix]

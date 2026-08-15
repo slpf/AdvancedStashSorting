@@ -295,7 +295,7 @@ public static class SortOrderMenu
         if (!_localeSubscribed)
         {
             _localeSubscribed = true;
-            LocalizationManager.Instance.AddLocaleUpdateListener(OnLocaleChanged);
+            LocaleManagerClass.LocaleManagerClass.AddLocaleUpdateListener(OnLocaleChanged);
         }
     }
 

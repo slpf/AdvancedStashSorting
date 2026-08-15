@@ -18,30 +18,31 @@ namespace AdvancedStashSorting.Patches;
 public class SortPreparationPatch : ModulePatch
 {
     internal static bool HandledSort;
-
+    
     private static readonly AccessTools.FieldRef<SimpleStashPanel, InventorySelectableItemContext> StashItemContext =
-        AccessTools.FieldRefAccess<SimpleStashPanel, InventorySelectableItemContext>("_itemContext");
+        AccessTools.FieldRefAccess<SimpleStashPanel, InventorySelectableItemContext>("gclass3458_0");
 
     private static readonly AccessTools.FieldRef<GridWindow, ItemContext> GridWindowItemContext =
-        AccessTools.FieldRefAccess<GridWindow, ItemContext>("_itemContext");
+        AccessTools.FieldRefAccess<GridWindow, ItemContext>("itemContextAbstractClass");
 
     protected override MethodBase GetTargetMethod()
     {
-        return AccessTools.Method(typeof(GridSortPanel), nameof(GridSortPanel.Sort));
+        return AccessTools.Method(typeof(GridSortPanel), "method_1");
     }
 
     [PatchPrefix]
     [HarmonyPriority(Priority.First)]
-    public static bool Prefix(GridSortPanel __instance, CompoundItem ____item, InventoryController ____controller)
+    public static bool Prefix(GridSortPanel __instance, CompoundItem ____compoundItem_0,
+        InventoryController ____inventoryController_0)
     {
         HandledSort = false;
 
-        if (!IsInventorySortPanel(__instance, ____item))
+        if (!IsInventorySortPanel(__instance, ____compoundItem_0))
             return true;
 
         bool foldingEnabled = SortSettings.FoldingEnabled;
         bool stackingEnabled = SortSettings.StackingEnabled;
-        bool nestingEnabled = SortSettings.NestingEnabled && IsMainStash(____item, ____controller);
+        bool nestingEnabled = SortSettings.NestingEnabled && IsMainStash(____compoundItem_0, ____inventoryController_0);
         bool hasCriteria = SortSettings.HasEnabledCriterion();
 
         if (SortInterceptionPolicy.ShouldRunOriginal(
@@ -59,7 +60,7 @@ public class SortPreparationPatch : ModulePatch
             stackingEnabled,
             nestingEnabled,
             sortConfiguration);
-        _ = Sort(__instance, ____item, ____controller, settings);
+        _ = Sort(__instance, ____compoundItem_0, ____inventoryController_0, settings);
 
         return false;
     }
@@ -95,7 +96,7 @@ public class SortPreparationPatch : ModulePatch
 
         try
         {
-            panel.ChangeProgress(true);
+            panel.method_3(true);
             progressStarted = true;
 
             Error error = settings.HasPreparation
@@ -113,7 +114,7 @@ public class SortPreparationPatch : ModulePatch
 
             if (error == null && settings.SortConfiguration.HasCriteria)
             {
-                OperationResult<ApplySortItemsPositionResult> operation =
+                GStruct154<ApplySortItemsPositionResult> operation =
                     BuildSortOperation(compoundItem, inventoryController, settings.SortConfiguration);
 
                 if (operation.Failed)
@@ -139,7 +140,7 @@ public class SortPreparationPatch : ModulePatch
             if (progressStarted && panel != null)
                 try
                 {
-                    panel.ChangeProgress(false);
+                    panel.method_3(false);
                 }
                 catch (Exception exception)
                 {
@@ -169,7 +170,7 @@ public class SortPreparationPatch : ModulePatch
 
             if (!settings.SortConfiguration.HasCriteria) return null;
 
-            OperationResult<ApplySortItemsPositionResult> sortOperation =
+            GStruct154<ApplySortItemsPositionResult> sortOperation =
                 BuildSortOperation(compoundItem, inventoryController, settings.SortConfiguration);
 
             return sortOperation.Failed ? sortOperation.Error : null;
@@ -185,7 +186,7 @@ public class SortPreparationPatch : ModulePatch
         return inventoryController?.Inventory?.Stash == compoundItem;
     }
 
-    private static OperationResult<ApplySortItemsPositionResult> BuildSortOperation(CompoundItem compoundItem,
+    private static GStruct154<ApplySortItemsPositionResult> BuildSortOperation(CompoundItem compoundItem,
         InventoryController inventoryController, SortConfiguration configuration)
     {
         if (compoundItem.Grids.Length == 1 && configuration.CompactSortingEnabled)
@@ -206,7 +207,7 @@ public class SortPreparationPatch : ModulePatch
             if (item.PinLockState != EItemPinLockState.Free || !ItemManipulator.CanFold(item, out FoldableComponent foldable) ||
                 foldable.Folded) continue;
 
-            OperationResult<FoldResult> operation = ItemManipulator.Fold(foldable, true, runNetworkTransactions);
+            GStruct154<FoldResult> operation = ItemManipulator.Fold(foldable, true, runNetworkTransactions);
 
             if (operation.Failed) return operation.Error;
 
@@ -292,7 +293,7 @@ public class SortPreparationPatch : ModulePatch
 
             int targetCount = target.StackObjectsCount;
             int sourceCount = source.StackObjectsCount;
-            OperationResult<ITransferOrMergeResult> operation =
+            GStruct154<ITransferOrMergeResult> operation =
                 ItemManipulator.TransferOrMerge(source, target, inventoryController, runNetworkTransactions);
 
             if (operation.Failed) return operation.Error;

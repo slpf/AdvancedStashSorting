@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using AdvancedStashSorting.Sorting;
 using EFT.InventoryLogic;
 using EFT.UI;
+using HarmonyLib;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -12,6 +13,18 @@ namespace AdvancedStashSorting.UI;
 
 public sealed class TagCategoryPanelController : MonoBehaviour
 {
+    private static readonly AccessTools.FieldRef<EditTagWindow, DefaultUIButton> SaveButtonSpawnerField =
+        AccessTools.FieldRefAccess<EditTagWindow, DefaultUIButton>("_saveButtonSpawner");
+
+    private static readonly AccessTools.FieldRef<EditTagWindow, ValidationInputField> TagInputField =
+        AccessTools.FieldRefAccess<EditTagWindow, ValidationInputField>("_tagInput");
+
+    private static readonly AccessTools.FieldRef<EditTagWindow, TagColorsPanel> ColorsPanelField =
+        AccessTools.FieldRefAccess<EditTagWindow, TagColorsPanel>("_colorsPanel");
+
+    private static readonly AccessTools.FieldRef<EditTagWindow, TextMeshProUGUI> ContainerTagLabelField =
+        AccessTools.FieldRefAccess<EditTagWindow, TextMeshProUGUI>("_containerTagLabel");
+
     private const float RaiseOffsetScreenPercent = 0.10f;
     private readonly List<TagCategoryButton> _buttons = [];
     private List<string> _available;
@@ -113,9 +126,9 @@ public sealed class TagCategoryPanelController : MonoBehaviour
     private void Build()
     {
         _root = _window.GetComponent<RectTransform>();
-        _saveRect = _window._saveButtonSpawner.GetComponent<RectTransform>();
-        RectTransform inputRect = _window._tagInput.GetComponent<RectTransform>();
-        RectTransform colorsRect = _window._colorsPanel.GetComponent<RectTransform>();
+        _saveRect = SaveButtonSpawnerField(_window).GetComponent<RectTransform>();
+        RectTransform inputRect = TagInputField(_window).GetComponent<RectTransform>();
+        RectTransform colorsRect = ColorsPanelField(_window).GetComponent<RectTransform>();
         RectTransform content = FindCommonParent(inputRect, colorsRect, _saveRect);
 
         if (_root == null || _saveRect == null || inputRect == null || content == null)
@@ -184,7 +197,7 @@ public sealed class TagCategoryPanelController : MonoBehaviour
         panelImage.raycastTarget = true;
 
         Canvas.ForceUpdateCanvases();
-        TMP_FontAsset font = _window._containerTagLabel.font;
+        TMP_FontAsset font = ContainerTagLabelField(_window).font;
 
         MakeHeader(panelRect, font);
         MakeCategoryViewport(panelRect, font, fullGridHeight, gridSpacing, cellHeight, canvasScale);

@@ -6,11 +6,15 @@ using HarmonyLib;
 using SPT.Reflection.Patching;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 namespace AdvancedStashSorting.Patches;
 
 public class SortButtonPatch : ModulePatch
 {
+    private static readonly AccessTools.FieldRef<GridSortPanel, Button> ButtonField =
+        AccessTools.FieldRefAccess<GridSortPanel, Button>("_button");
+
     protected override MethodBase GetTargetMethod()
     {
         return AccessTools.Method(typeof(GridSortPanel), nameof(GridSortPanel.Show));
@@ -19,21 +23,23 @@ public class SortButtonPatch : ModulePatch
     [PatchPostfix]
     public static void Postfix(GridSortPanel __instance, CompoundItem item)
     {
+        Button button = ButtonField(__instance);
+
         bool isInventoryStash = item is Stash &&
                                 SortPreparationPatch.IsInventorySortPanel(__instance, item);
 
-        if (__instance._button == null) return;
+        if (button == null) return;
 
-        SortButtonRightClick trigger = __instance._button.gameObject.GetComponent<SortButtonRightClick>();
+        SortButtonRightClick trigger = button.gameObject.GetComponent<SortButtonRightClick>();
         if (!isInventoryStash)
         {
             trigger?.ClearButton();
             return;
         }
 
-        if (trigger == null) trigger = __instance._button.gameObject.AddComponent<SortButtonRightClick>();
+        if (trigger == null) trigger = button.gameObject.AddComponent<SortButtonRightClick>();
 
-        trigger.SetButton(__instance._button.GetComponent<RectTransform>());
+        trigger.SetButton(button.GetComponent<RectTransform>());
     }
 }
 

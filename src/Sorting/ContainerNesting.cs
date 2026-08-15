@@ -41,7 +41,7 @@ public static class ContainerNesting
 
                 if (address == null) continue;
 
-                OperationResult<MoveResult> operation = ItemManipulator.Move(item, address, inventoryController, runNetworkTransactions);
+                GStruct154<MoveResult> operation = ItemManipulator.Move(item, address, inventoryController, runNetworkTransactions);
 
                 if (operation.Failed) continue;
 

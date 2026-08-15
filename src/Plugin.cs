@@ -31,10 +31,10 @@ public class Plugin : BaseUnityPlugin
         string confPath = Path.Combine(pluginDir, "AdvancedStashSorting.json");
 
         AdvancedStashSorting.Config.Load(confPath);
-
-        LocalizationManager lm = LocalizationManager.Instance;
-        Localization.Culture = lm.Culture;
-        lm.AddLocaleUpdateListener(() => Localization.Culture = lm.Culture);
+        
+        LocaleManagerClass lm = LocaleManagerClass.LocaleManagerClass;
+        Localization.Culture = lm.String_0;
+        lm.AddLocaleUpdateListener(() => Localization.Culture = lm.String_0);
 
         Localization.LoadLocales(pluginDir);
 

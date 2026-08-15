@@ -1,1 +1,1 @@
-AdvancedStashSorting for SPT 4.1.0+.
+AdvancedStashSorting for SPT 4.0.0+
