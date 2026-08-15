@@ -32,17 +32,17 @@ public class SortPreparationPatch : ModulePatch
 
     [PatchPrefix]
     [HarmonyPriority(Priority.First)]
-    public static bool Prefix(GridSortPanel __instance, CompoundItem ____compoundItem_0,
-        InventoryController ____inventoryController_0)
+    public static bool Prefix(GridSortPanel __instance, CompoundItem ___compoundItem_0,
+        InventoryController ___inventoryController_0)
     {
         HandledSort = false;
 
-        if (!IsInventorySortPanel(__instance, ____compoundItem_0))
+        if (!IsInventorySortPanel(__instance, ___compoundItem_0))
             return true;
 
         bool foldingEnabled = SortSettings.FoldingEnabled;
         bool stackingEnabled = SortSettings.StackingEnabled;
-        bool nestingEnabled = SortSettings.NestingEnabled && IsMainStash(____compoundItem_0, ____inventoryController_0);
+        bool nestingEnabled = SortSettings.NestingEnabled && IsMainStash(___compoundItem_0, ___inventoryController_0);
         bool hasCriteria = SortSettings.HasEnabledCriterion();
 
         if (SortInterceptionPolicy.ShouldRunOriginal(
@@ -60,7 +60,7 @@ public class SortPreparationPatch : ModulePatch
             stackingEnabled,
             nestingEnabled,
             sortConfiguration);
-        _ = Sort(__instance, ____compoundItem_0, ____inventoryController_0, settings);
+        _ = Sort(__instance, ___compoundItem_0, ___inventoryController_0, settings);
 
         return false;
     }
