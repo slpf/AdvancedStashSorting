@@ -34,6 +34,7 @@ public static class SortSettings
     public static bool FoldingEnabled = true;
     public static bool StackingEnabled = true;
     public static bool NestingEnabled = false;
+    public static bool RecursiveNestingEnabled = false;
     public static bool SeparationEnabled = false;
 
     public static List<SortTypeSetting> CreateDefaultSortOrder()

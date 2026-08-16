@@ -10,9 +10,9 @@ namespace AdvancedStashSorting.Sorting;
 public static class ContainerNesting
 {
     public static async Task<Error> MoveItems(CompoundItem sortedItem, InventoryController inventoryController,
-        List<IOperationResult> stagedOperations, bool runNetworkTransactions)
+        List<IOperationResult> stagedOperations, bool runNetworkTransactions, bool recursive)
     {
-        List<NestingTarget> targets = GetTargets(sortedItem);
+        List<NestingTarget> targets = GetTargets(sortedItem, recursive);
 
         if (targets.Count == 0) return null;
 
@@ -34,7 +34,8 @@ public static class ContainerNesting
             {
                 NestingTarget target = targets[targetIndex];
 
-                if (target.Item == item || !ContainerCategorySettings.IsAllowed(target.Item, category)) continue;
+                if (target.Item == item || IsInside(target.Item, item) ||
+                    !ContainerCategorySettings.IsAllowed(target.Item, category)) continue;
 
                 Grid grid = target.Grid;
                 GridItemAddress address = grid.FindLocationForItem(item);
@@ -82,30 +83,50 @@ public static class ContainerNesting
         return false;
     }
 
-    private static List<NestingTarget> GetTargets(CompoundItem sortedItem)
+    private static List<NestingTarget> GetTargets(CompoundItem sortedItem, bool recursive)
     {
         List<NestingTarget> targets = [];
+        HashSet<Item> visited = recursive ? new HashSet<Item>() : null;
 
         foreach (Grid rootGrid in sortedItem.Grids)
         foreach (Item item in rootGrid.Items)
-        {
-            if (item is not CompoundItem container || !CanUseAsTarget(container) || IsFolded(container)) continue;
-
-            for (int gridIndex = 0; gridIndex < container.Grids.Length; gridIndex++)
-            {
-                Grid grid = container.Grids[gridIndex];
-                targets.Add(new NestingTarget(container, grid));
-            }
-        }
+            CollectTargets(item, targets, recursive, 0, visited);
 
         targets.Sort(CompareTargets);
 
         return targets;
     }
 
+    private static void CollectTargets(Item item, List<NestingTarget> targets, bool recursive, int depth,
+        HashSet<Item> visited)
+    {
+        if (item is not CompoundItem container) return;
+        if (visited != null && !visited.Add(item)) return;
+
+        if (CanUseAsTarget(container) && !IsFolded(container))
+            for (int gridIndex = 0; gridIndex < container.Grids.Length; gridIndex++)
+                targets.Add(new NestingTarget(container, container.Grids[gridIndex], depth));
+
+        if (!recursive) return;
+
+        foreach (Grid grid in container.Grids)
+        foreach (Item child in grid.Items)
+            CollectTargets(child, targets, recursive, depth + 1, visited);
+    }
+
     private static bool CanUseAsTarget(CompoundItem container)
     {
         return CanConfigureCategories(container) && ContainerCategorySettings.HasSelection(container.Id);
+    }
+
+    private static bool IsInside(Item item, Item ancestor)
+    {
+        if (ancestor is not CompoundItem) return false;
+
+        foreach (Item parent in item.GetAllParentItemsAndSelf())
+            if (parent == ancestor) return true;
+
+        return false;
     }
     
     private static bool IsFolded(Item item)
@@ -115,6 +136,10 @@ public static class ContainerNesting
 
     private static int CompareTargets(NestingTarget left, NestingTarget right)
     {
+        int depthComparison = right.Depth.CompareTo(left.Depth);
+
+        if (depthComparison != 0) return depthComparison;
+
         int restrictionComparison = left.RestrictionCount.CompareTo(right.RestrictionCount);
 
         if (restrictionComparison != 0) return restrictionComparison;
@@ -152,10 +177,11 @@ public static class ContainerNesting
         return items;
     }
 
-    private sealed class NestingTarget(CompoundItem item, Grid grid)
+    private sealed class NestingTarget(CompoundItem item, Grid grid, int depth)
     {
         public CompoundItem Item { get; } = item;
         public Grid Grid { get; } = grid;
+        public int Depth { get; } = depth;
         public int RestrictionCount { get; } = GetRestrictionCount(grid);
         public int Capacity { get; } = grid.GridWidth * grid.GridHeight;
     }

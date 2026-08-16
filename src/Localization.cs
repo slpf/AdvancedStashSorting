@@ -21,6 +21,7 @@ public static class Localization
             ["folding"] = "Fold Items",
             ["stacking"] = "Merge Stacks",
             ["nesting"] = "Move Into Containers",
+            ["nesting_recursive"] = "Include Nested",
             ["compact_sorting"] = "Compact Layout",
             ["separation"] = "Separate Categories",
             ["container_categories_title"] = "Categories to Move on Sort",

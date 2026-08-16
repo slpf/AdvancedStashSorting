@@ -42,7 +42,7 @@ public class SortPreparationPatch : ModulePatch
 
         bool foldingEnabled = SortSettings.FoldingEnabled;
         bool stackingEnabled = SortSettings.StackingEnabled;
-        bool nestingEnabled = SortSettings.NestingEnabled && IsMainStash(___compoundItem_0, ___inventoryController_0);
+        bool nestingEnabled = SortSettings.NestingEnabled;
         bool hasCriteria = SortSettings.HasEnabledCriterion();
 
         if (SortInterceptionPolicy.ShouldRunOriginal(
@@ -59,6 +59,7 @@ public class SortPreparationPatch : ModulePatch
             foldingEnabled,
             stackingEnabled,
             nestingEnabled,
+            SortSettings.RecursiveNestingEnabled,
             sortConfiguration);
         _ = Sort(__instance, ___compoundItem_0, ___inventoryController_0, settings);
 
@@ -110,7 +111,8 @@ public class SortPreparationPatch : ModulePatch
                 error = await StackItems(compoundItem, inventoryController, null, true);
 
             if (error == null && settings.NestingEnabled)
-                error = await ContainerNesting.MoveItems(compoundItem, inventoryController, null, true);
+                error = await ContainerNesting.MoveItems(compoundItem, inventoryController, null, true,
+                    settings.RecursiveNestingEnabled);
 
             if (error == null && settings.SortConfiguration.HasCriteria)
             {
@@ -164,7 +166,8 @@ public class SortPreparationPatch : ModulePatch
                 error = await StackItems(compoundItem, inventoryController, operations, false);
 
             if (error == null && settings.NestingEnabled)
-                error = await ContainerNesting.MoveItems(compoundItem, inventoryController, operations, false);
+                error = await ContainerNesting.MoveItems(compoundItem, inventoryController, operations, false,
+                    settings.RecursiveNestingEnabled);
 
             if (error != null) return error;
 
@@ -179,11 +182,6 @@ public class SortPreparationPatch : ModulePatch
         {
             for (int i = operations.Count - 1; i >= 0; i--) operations[i].RollBack();
         }
-    }
-
-    private static bool IsMainStash(CompoundItem compoundItem, InventoryController inventoryController)
-    {
-        return inventoryController?.Inventory?.Stash == compoundItem;
     }
 
     private static GStruct154<ApplySortItemsPositionResult> BuildSortOperation(CompoundItem compoundItem,
@@ -359,11 +357,13 @@ public class SortPreparationPatch : ModulePatch
         bool foldingEnabled,
         bool stackingEnabled,
         bool nestingEnabled,
+        bool recursiveNestingEnabled,
         SortConfiguration sortConfiguration)
     {
         public bool FoldingEnabled { get; } = foldingEnabled;
         public bool StackingEnabled { get; } = stackingEnabled;
         public bool NestingEnabled { get; } = nestingEnabled;
+        public bool RecursiveNestingEnabled { get; } = recursiveNestingEnabled;
 
         public SortConfiguration SortConfiguration { get; } =
             sortConfiguration ?? throw new ArgumentNullException(nameof(sortConfiguration));

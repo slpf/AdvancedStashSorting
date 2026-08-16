@@ -188,6 +188,7 @@ public static class SortOrderMenu
         MakeHeader(_rootContentRect, Localization.Get("sortby"));
 
         ToggleRow separationRow = null;
+        ToggleRow recursiveNestingRow = null;
 
         ReorderableList.Create(_rootContentRect, _overlay.transform, SortSettings.SortOrder, _pixelGrid,
             new ReorderableListOptions<SortTypeSetting>
@@ -261,6 +262,13 @@ public static class SortOrderMenu
             RefreshSeparationRow(separationRow);
         }, _pixelGrid);
 
+        separationRow = ToggleRow.Create(_rootContentRect, Localization.Get("separation"), false, b =>
+        {
+            SortSettings.SeparationEnabled = b;
+            Config.MarkDirty();
+        }, _pixelGrid);
+        RefreshSeparationRow(separationRow);
+        
         ToggleRow.Create(_rootContentRect, Localization.Get("folding"), SortSettings.FoldingEnabled, b =>
         {
             SortSettings.FoldingEnabled = b;
@@ -277,15 +285,17 @@ public static class SortOrderMenu
         {
             SortSettings.NestingEnabled = b;
             Config.MarkDirty();
+            RefreshRecursiveNestingRow(recursiveNestingRow);
         }, _pixelGrid);
 
-        separationRow = ToggleRow.Create(_rootContentRect, Localization.Get("separation"), false, b =>
-        {
-            SortSettings.SeparationEnabled = b;
-            Config.MarkDirty();
-        }, _pixelGrid);
-        RefreshSeparationRow(separationRow);
-
+        recursiveNestingRow = ToggleRow.Create(_rootContentRect, Localization.Get("nesting_recursive"),
+            SortSettings.RecursiveNestingEnabled, b =>
+            {
+                SortSettings.RecursiveNestingEnabled = b;
+                Config.MarkDirty();
+            }, _pixelGrid);
+        RefreshRecursiveNestingRow(recursiveNestingRow);
+        
         ResizePanel(_rootRect, _rootContentRect);
 
         _backdrop.SetActive(false);
@@ -306,6 +316,15 @@ public static class SortOrderMenu
         bool available = SortSettings.CanSeparateCategories();
         separationRow.SetInteractable(available);
         separationRow.SetValue(available && SortSettings.SeparationEnabled);
+    }
+
+    private static void RefreshRecursiveNestingRow(ToggleRow recursiveRow)
+    {
+        if (recursiveRow == null) return;
+
+        bool available = SortSettings.NestingEnabled;
+        recursiveRow.SetInteractable(available);
+        recursiveRow.SetValue(available && SortSettings.RecursiveNestingEnabled);
     }
 
     private static void ShowSubCategories(string parent, ReorderRow row)
