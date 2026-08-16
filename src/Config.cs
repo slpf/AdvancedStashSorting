@@ -140,6 +140,7 @@ public static class Config
         SortSettings.FoldingEnabled = sort.Fold;
         SortSettings.StackingEnabled = sort.Stack;
         SortSettings.NestingEnabled = sort.Nesting;
+        SortSettings.RecursiveNestingEnabled = sort.RecursiveNesting;
         SortSettings.CompactSortingEnabled = sort.CompactSorting;
         SortSettings.SeparationEnabled = sort.Separation;
 
@@ -227,6 +228,7 @@ public static class Config
                 Fold = SortSettings.FoldingEnabled,
                 Stack = SortSettings.StackingEnabled,
                 Nesting = SortSettings.NestingEnabled,
+                RecursiveNesting = SortSettings.RecursiveNestingEnabled,
                 CompactSorting = SortSettings.CompactSortingEnabled,
                 Separation = SortSettings.SeparationEnabled
             },
@@ -253,6 +255,7 @@ public static class Config
         public bool Fold { get; set; } = true;
         public bool Stack { get; set; } = true;
         public bool Nesting { get; set; }
+        public bool RecursiveNesting { get; set; }
         public bool CompactSorting { get; set; } = true;
         public bool Separation { get; set; }
     }
