@@ -52,7 +52,7 @@ public class SortPreparationPatch : ModulePatch
                 out HandledSort)) return true;
 
         SortConfiguration sortConfiguration = hasCriteria
-            ? SortConfiguration.Capture()
+            ? SortConfiguration.Capture(IsMainStash(____item, ____controller))
             : SortConfiguration.Empty;
         PreparationSettings settings = new(
             foldingEnabled,
@@ -181,6 +181,11 @@ public class SortPreparationPatch : ModulePatch
         {
             for (int i = operations.Count - 1; i >= 0; i--) operations[i].RollBack();
         }
+    }
+
+    private static bool IsMainStash(CompoundItem compoundItem, InventoryController inventoryController)
+    {
+        return inventoryController?.Inventory?.Stash == compoundItem;
     }
 
     private static OperationResult<ApplySortItemsPositionResult> BuildSortOperation(CompoundItem compoundItem,

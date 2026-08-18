@@ -35,7 +35,7 @@ internal sealed class SortConfiguration
     public bool CompactSortingEnabled { get; }
     public bool SeparatePrimaryGroups { get; }
 
-    public static SortConfiguration Capture()
+    public static SortConfiguration Capture(bool allowSeparation)
     {
         List<SortCriterion> criteria = [];
         bool hasCategoryCriterion = false;
@@ -68,7 +68,8 @@ internal sealed class SortConfiguration
             : null;
 
         bool compactSortingEnabled = SortSettings.CompactSortingEnabled;
-        bool separatePrimaryGroups = SortSettings.SeparationEnabled && SortSettings.CanSeparateCategories();
+        bool separatePrimaryGroups = allowSeparation && SortSettings.SeparationEnabled &&
+                                     SortSettings.CanSeparateCategories();
         return new SortConfiguration(
             criteria.ToArray(),
             categoryIndex,
