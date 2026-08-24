@@ -21,9 +21,16 @@ public static class Localization
             ["folding"] = "Fold Items",
             ["stacking"] = "Merge Stacks",
             ["nesting"] = "Move Into Containers",
-			["nesting_recursive"] = "Include Nested",
+            ["nesting_recursive"] = "Include Nested",
             ["compact_sorting"] = "Compact Layout",
             ["separation"] = "Separate Categories",
+            ["compact_sorting_tooltip"] = "More compact item sorting based on the selected sorting order.",
+            ["separation_tooltip"] = "Each new category starts on a new row.\n\n<color=#d22b2b>Sorting may fail if there is not enough free space.</color>",
+            ["folding_tooltip"] = "Folds items before sorting.",
+            ["stacking_tooltip"] = "Stacks items before sorting.",
+            ["nesting_tooltip"] = "Moves items to configured containers before sorting.",
+            ["nesting_recursive_tooltip"] = "Also uses configured containers located inside other containers when moving items.",
+            ["sort_error_not_enough_space"] = "Not enough free space to sort items.",
             ["container_categories_title"] = "Categories to Move on Sort",
             ["enable_all"] = "Enable all",
             ["disable_all"] = "Disable all",
@@ -104,12 +111,15 @@ public static class Localization
 
     public static string Get(string key)
     {
-        string value =
+        return GetRaw(key).ToUpperInvariant();
+    }
+
+    public static string GetRaw(string key)
+    {
+        return
             Locales.GetValueOrDefault(Culture)?.GetValueOrDefault(key) ??
             Locales.GetValueOrDefault("en")?.GetValueOrDefault(key) ??
             key;
-
-        return value.ToUpperInvariant();
     }
 
     public static void LoadLocales(string directory)

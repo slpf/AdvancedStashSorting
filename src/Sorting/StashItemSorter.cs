@@ -65,6 +65,10 @@ public static class StashItemSorter
             if (searchResult.Plan == null)
             {
                 RollBackRemoveResults(removeResults);
+
+                if (searchResult.Status == OrderedLayoutStatus.NoFit)
+                    return new InsufficientSortSpaceError();
+
                 return new AutomaticSortFailedError(sortedItem);
             }
 

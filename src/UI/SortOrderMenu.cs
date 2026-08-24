@@ -260,40 +260,40 @@ public static class SortOrderMenu
             SortSettings.CompactSortingEnabled = b;
             Config.MarkDirty();
             RefreshSeparationRow(separationRow);
-        }, _pixelGrid);
+        }, _pixelGrid, Localization.GetRaw("compact_sorting_tooltip"));
         
         separationRow = ToggleRow.Create(_rootContentRect, Localization.Get("separation"), false, b =>
         {
             SortSettings.SeparationEnabled = b;
             Config.MarkDirty();
-        }, _pixelGrid);
+        }, _pixelGrid, Localization.GetRaw("separation_tooltip"));
         RefreshSeparationRow(separationRow);
 
         ToggleRow.Create(_rootContentRect, Localization.Get("folding"), SortSettings.FoldingEnabled, b =>
         {
             SortSettings.FoldingEnabled = b;
             Config.MarkDirty();
-        }, _pixelGrid);
+        }, _pixelGrid, Localization.GetRaw("folding_tooltip"));
 
         ToggleRow.Create(_rootContentRect, Localization.Get("stacking"), SortSettings.StackingEnabled, b =>
         {
             SortSettings.StackingEnabled = b;
             Config.MarkDirty();
-        }, _pixelGrid);
+        }, _pixelGrid, Localization.GetRaw("stacking_tooltip"));
 
         ToggleRow.Create(_rootContentRect, Localization.Get("nesting"), SortSettings.NestingEnabled, b =>
         {
             SortSettings.NestingEnabled = b;
             Config.MarkDirty();
             RefreshRecursiveNestingRow(recursiveNestingRow);
-        }, _pixelGrid);
+        }, _pixelGrid, Localization.GetRaw("nesting_tooltip"));
 
         recursiveNestingRow = ToggleRow.Create(_rootContentRect, Localization.Get("nesting_recursive"),
             SortSettings.RecursiveNestingEnabled, b =>
             {
                 SortSettings.RecursiveNestingEnabled = b;
                 Config.MarkDirty();
-            }, _pixelGrid);
+            }, _pixelGrid, Localization.GetRaw("nesting_recursive_tooltip"));
         RefreshRecursiveNestingRow(recursiveNestingRow);
 
         ResizePanel(_rootRect, _rootContentRect);
