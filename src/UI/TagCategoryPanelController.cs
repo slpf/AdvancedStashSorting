@@ -25,8 +25,11 @@ public sealed class TagCategoryPanelController : MonoBehaviour
     private static readonly AccessTools.FieldRef<EditTagWindow, TextMeshProUGUI> ContainerTagLabelField =
         AccessTools.FieldRefAccess<EditTagWindow, TextMeshProUGUI>("_containerTagLabel");
 
-    private const float RaiseOffsetScreenPercent = 0.10f;
+    private const float WindowVerticalMarginPixels = 32f;
+    private readonly Dictionary<string, List<string>> _availableByMain = new();
     private readonly List<TagCategoryButton> _buttons = [];
+    private readonly List<TagCategoryButton> _mainButtons = [];
+    private readonly List<string> _mainCategories = [];
     private List<string> _available;
     private CompoundItem _container;
     private int _generation;
@@ -65,6 +68,7 @@ public sealed class TagCategoryPanelController : MonoBehaviour
         _container = container;
         _available = available;
         _selection = ContainerCategorySettings.GetSelection(container, available);
+        BuildMainCategories();
 
         int generation = ++_generation;
 
@@ -100,7 +104,10 @@ public sealed class TagCategoryPanelController : MonoBehaviour
             if (_saveRect != null) _saveRect.anchoredPosition = _originalSavePosition;
         }
 
+        _availableByMain.Clear();
         _buttons.Clear();
+        _mainButtons.Clear();
+        _mainCategories.Clear();
         _window = null;
         _container = null;
         _selection = null;
@@ -146,11 +153,23 @@ public sealed class TagCategoryPanelController : MonoBehaviour
         float canvasScale = SortTheme.NormalizeScale(canvas != null ? canvas.rootCanvas.scaleFactor : 1f);
         float gridSpacing = SnapToPhysicalPixel(SortTheme.TagCategoryGridSpacing, canvasScale);
         float cellHeight = SnapToPhysicalPixel(SortTheme.TagCategoryCellHeight, canvasScale);
+        float groupDividerHeight = SnapToPhysicalPixel(SortTheme.TagCategoryGroupDividerHeight, canvasScale);
+        float groupDividerMargin = SnapToPhysicalPixel(SortTheme.TagCategoryGroupDividerHorizontalMargin, canvasScale);
 
-        int rowCount = Mathf.CeilToInt(_available.Count / (float)SortTheme.TagCategoryColumnCount);
-        float fullGridHeight = rowCount * cellHeight + Mathf.Max(0, rowCount - 1) * gridSpacing;
-        float panelHeight = SortTheme.TagCategoryTopPadding + SortTheme.TagCategoryTitleHeight +
-                            SortTheme.TagCategorySectionSpacing + fullGridHeight;
+        float mainGridHeight = CalculateGridHeight(_mainCategories.Count, cellHeight, gridSpacing);
+        float categoryGridHeight = CalculateGridHeight(_available.Count, cellHeight, gridSpacing);
+        float gridTop = SortTheme.TagCategoryTopPadding + SortTheme.TagCategoryTitleHeight +
+                        SortTheme.TagCategorySectionSpacing;
+        float categoryGridTop = gridTop;
+        float groupDividerTop = 0f;
+
+        if (_mainCategories.Count > 0)
+        {
+            groupDividerTop = gridTop + mainGridHeight + SortTheme.TagCategorySectionSpacing;
+            categoryGridTop = groupDividerTop + groupDividerHeight + SortTheme.TagCategorySectionSpacing;
+        }
+
+        float panelHeight = categoryGridTop + categoryGridHeight;
         float extension = panelHeight;
 
         _root.sizeDelta = _originalRootSize + new Vector2(0f, extension);
@@ -200,11 +219,19 @@ public sealed class TagCategoryPanelController : MonoBehaviour
         TMP_FontAsset font = ContainerTagLabelField(_window).font;
 
         MakeHeader(panelRect, font);
-        MakeCategoryViewport(panelRect, font, fullGridHeight, gridSpacing, cellHeight, canvasScale);
+        if (_mainCategories.Count > 0)
+        {
+            MakeCategoryViewport(panelRect, font, "MainCategoryViewport", "MainCategories", _mainCategories,
+                _mainButtons, ToggleMainCategory, gridTop, mainGridHeight, gridSpacing, cellHeight, canvasScale);
+            MakeGroupDivider(panelRect, groupDividerTop, groupDividerHeight, groupDividerMargin);
+        }
+
+        MakeCategoryViewport(panelRect, font, "CategoryViewport", "Categories", _available, _buttons,
+            ToggleCategory, categoryGridTop, categoryGridHeight, gridSpacing, cellHeight, canvasScale);
         RefreshButtons();
 
         Canvas.ForceUpdateCanvases();
-        RaiseWindow(_window);
+        ClampWindowVertically(_window);
 
         if (!panelUsesLayout)
         {
@@ -229,16 +256,56 @@ public sealed class TagCategoryPanelController : MonoBehaviour
         }
     }
 
-    private static void RaiseWindow(EditTagWindow window)
+    private static void ClampWindowVertically(EditTagWindow window)
     {
         RectTransform rect = window.GetComponent<RectTransform>();
         Canvas canvas = window.GetComponentInParent<Canvas>();
-        float scale = canvas != null && canvas.rootCanvas != null ? canvas.rootCanvas.scaleFactor : 1f;
+        Canvas rootCanvas = canvas != null ? canvas.rootCanvas : null;
+        RectTransform canvasRect = rootCanvas != null ? rootCanvas.transform as RectTransform : null;
 
-        if (scale <= 0f) scale = 1f;
+        if (rect == null || rect.parent == null || canvasRect == null || canvasRect.rect.height <= 0f) return;
 
-        float offsetPixels = Screen.height * RaiseOffsetScreenPercent;
-        rect.anchoredPosition += Vector2.up * (offsetPixels / scale);
+        float scaleFactor = rootCanvas.scaleFactor;
+
+        if (float.IsNaN(scaleFactor) || float.IsInfinity(scaleFactor) || scaleFactor <= 0f) scaleFactor = 1f;
+
+        float margin = Mathf.Min(WindowVerticalMarginPixels / scaleFactor, canvasRect.rect.height * 0.5f);
+        float lowerBound = canvasRect.rect.yMin + margin;
+        float upperBound = canvasRect.rect.yMax - margin;
+        Vector3[] corners = new Vector3[4];
+        rect.GetWorldCorners(corners);
+        float windowBottom = float.PositiveInfinity;
+        float windowTop = float.NegativeInfinity;
+
+        for (int i = 0; i < corners.Length; i++)
+        {
+            float cornerY = canvasRect.InverseTransformPoint(corners[i]).y;
+            windowBottom = Mathf.Min(windowBottom, cornerY);
+            windowTop = Mathf.Max(windowTop, cornerY);
+        }
+
+        float windowHeight = windowTop - windowBottom;
+        float availableHeight = upperBound - lowerBound;
+        float windowCenter = (windowBottom + windowTop) * 0.5f;
+        float targetCenter;
+
+        if (windowHeight <= availableHeight)
+        {
+            float halfHeight = windowHeight * 0.5f;
+            targetCenter = Mathf.Clamp(windowCenter, lowerBound + halfHeight, upperBound - halfHeight);
+        }
+        else
+        {
+            targetCenter = (lowerBound + upperBound) * 0.5f;
+        }
+
+        float offset = targetCenter - windowCenter;
+
+        if (Mathf.Approximately(offset, 0f)) return;
+
+        Vector3 worldOffset = canvasRect.TransformVector(Vector3.up * offset);
+        Vector3 parentOffset = rect.parent.InverseTransformVector(worldOffset);
+        rect.anchoredPosition += new Vector2(parentOffset.x, parentOffset.y);
     }
 
     private static RectTransform FindCommonParent(params RectTransform[] rects)
@@ -285,6 +352,35 @@ public sealed class TagCategoryPanelController : MonoBehaviour
     private static float SnapToPhysicalPixel(float value, float canvasScale)
     {
         return Mathf.Max(1f, Mathf.Round(value * canvasScale)) / canvasScale;
+    }
+
+    private static float CalculateGridHeight(int itemCount, float cellHeight, float gridSpacing)
+    {
+        int rowCount = Mathf.CeilToInt(itemCount / (float)SortTheme.TagCategoryColumnCount);
+        return rowCount * cellHeight + Mathf.Max(0, rowCount - 1) * gridSpacing;
+    }
+
+    private void BuildMainCategories()
+    {
+        _availableByMain.Clear();
+        _mainCategories.Clear();
+
+        for (int i = 0; i < _available.Count; i++)
+        {
+            string category = _available[i];
+            string main = CategoryCatalog.GetMainCategory(category);
+
+            if (!CategoryCatalog.HasChildren(main)) continue;
+
+            if (!_availableByMain.TryGetValue(main, out List<string> children))
+            {
+                children = [];
+                _availableByMain.Add(main, children);
+                _mainCategories.Add(main);
+            }
+
+            children.Add(category);
+        }
     }
 
     private void MakeHeader(RectTransform parent, TMP_FontAsset font)
@@ -358,17 +454,16 @@ public sealed class TagCategoryPanelController : MonoBehaviour
         toggleIcon.raycastTarget = false;
     }
 
-    private void MakeCategoryViewport(RectTransform parent, TMP_FontAsset font, float gridHeight, float gridSpacing,
-        float cellHeight, float canvasScale)
+    private static void MakeCategoryViewport(RectTransform parent, TMP_FontAsset font, string viewportName,
+        string contentName, IReadOnlyList<string> categories, List<TagCategoryButton> buttons, Action<string> onClick,
+        float top, float gridHeight, float gridSpacing, float cellHeight, float canvasScale)
     {
-        float top = SortTheme.TagCategoryTopPadding + SortTheme.TagCategoryTitleHeight +
-                    SortTheme.TagCategorySectionSpacing;
-        RectTransform viewport = MakeTopRect(parent, "CategoryViewport", top, gridHeight, typeof(Image), typeof(RectMask2D));
+        RectTransform viewport = MakeTopRect(parent, viewportName, top, gridHeight, typeof(Image), typeof(RectMask2D));
         Image viewportImage = viewport.GetComponent<Image>();
         viewportImage.color = SortTheme.Transparent;
         viewportImage.raycastTarget = true;
 
-        GameObject contentObject = new GameObject("Categories", typeof(RectTransform), typeof(RemainderGridLayoutGroup));
+        GameObject contentObject = new GameObject(contentName, typeof(RectTransform), typeof(RemainderGridLayoutGroup));
         contentObject.transform.SetParent(viewport, false);
         RectTransform content = contentObject.GetComponent<RectTransform>();
         content.anchorMin = new Vector2(0f, 1f);
@@ -394,11 +489,12 @@ public sealed class TagCategoryPanelController : MonoBehaviour
         grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
         grid.childAlignment = TextAnchor.UpperLeft;
 
-        for (int i = 0; i < _available.Count; i++)
+        for (int i = 0; i < categories.Count; i++)
         {
-            string category = _available[i];
-            TagCategoryButton button = TagCategoryButton.Create(content, category, Localization.Get(category), font, ToggleCategory);
-            _buttons.Add(button);
+            string category = categories[i];
+            TagCategoryButton button = TagCategoryButton.Create(content, category, Localization.Get(category), font,
+                onClick);
+            buttons.Add(button);
         }
     }
 
@@ -418,6 +514,16 @@ public sealed class TagCategoryPanelController : MonoBehaviour
         rect.sizeDelta = new Vector2(0f, height);
 
         return rect;
+    }
+
+    private static void MakeGroupDivider(RectTransform parent, float top, float height, float horizontalMargin)
+    {
+        RectTransform divider = MakeTopRect(parent, "MainCategoryDivider", top, height, typeof(Image));
+        divider.offsetMin = new Vector2(horizontalMargin, divider.offsetMin.y);
+        divider.offsetMax = new Vector2(-horizontalMargin, divider.offsetMax.y);
+        Image image = divider.GetComponent<Image>();
+        image.color = SortTheme.PanelBorder;
+        image.raycastTarget = false;
     }
 
     private static TextMeshProUGUI MakeText(RectTransform parent, string value, TMP_FontAsset font, float fontSize,
@@ -464,9 +570,32 @@ public sealed class TagCategoryPanelController : MonoBehaviour
         RefreshButtons();
     }
 
+    private void ToggleMainCategory(string category)
+    {
+        if (_selection == null || !_availableByMain.TryGetValue(category, out List<string> children) ||
+            children.Count == 0)
+            return;
+
+        if (_selection.IsSupersetOf(children))
+            _selection.ExceptWith(children);
+        else
+            _selection.UnionWith(children);
+
+        RefreshButtons();
+    }
+
     private void RefreshButtons()
     {
-        foreach (TagCategoryButton button in _buttons) button.SetSelected(_selection != null && _selection.Contains(button.Category));
+        foreach (TagCategoryButton button in _buttons)
+            button.SetSelected(_selection != null && _selection.Contains(button.Category));
+
+        foreach (TagCategoryButton button in _mainButtons)
+        {
+            bool selected = _selection != null &&
+                            _availableByMain.TryGetValue(button.Category, out List<string> children) &&
+                            children.Count > 0 && _selection.IsSupersetOf(children);
+            button.SetSelected(selected);
+        }
     }
 }
 

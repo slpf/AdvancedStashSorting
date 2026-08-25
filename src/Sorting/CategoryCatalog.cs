@@ -18,7 +18,16 @@ public static class CategoryCatalog
         "medicals",
         "food",
         "drinks",
-        "weapons",
+        "assault_rifles",
+        "assault_carbines",
+        "submachine_guns",
+        "shotguns",
+        "machine_guns",
+        "marksman_rifles",
+        "sniper_rifles",
+        "pistols",
+        "revolvers",
+        "other_weapons",
         "magazines",
         "headphones",
         "headwear",
@@ -72,6 +81,16 @@ public static class CategoryCatalog
         ["medicals"] = "m_meds",
         ["food"] = "m_food_drink",
         ["drinks"] = "m_food_drink",
+        ["assault_rifles"] = "m_weapons",
+        ["assault_carbines"] = "m_weapons",
+        ["machine_guns"] = "m_weapons",
+        ["marksman_rifles"] = "m_weapons",
+        ["pistols"] = "m_weapons",
+        ["revolvers"] = "m_weapons",
+        ["shotguns"] = "m_weapons",
+        ["sniper_rifles"] = "m_weapons",
+        ["submachine_guns"] = "m_weapons",
+        ["other_weapons"] = "m_weapons",
         ["headwear"] = "m_headwear",
         ["face_covers"] = "m_headwear",
         ["visors"] = "m_headwear",
@@ -117,10 +136,21 @@ public static class CategoryCatalog
         return key != "containers" && DefaultOrder.Contains(key);
     }
 
+    public static string GetMainCategory(string key)
+    {
+        if (key == null) return null;
+
+        int remaining = ParentMap.Count;
+
+        while (remaining-- > 0 && ParentMap.TryGetValue(key, out string parent)) key = parent;
+
+        return key;
+    }
+
     public static List<string> GetMainOrder()
     {
         HashSet<string> added = [];
-        return SortSettings.CategoryOrder.Select(key => ParentMap.GetValueOrDefault(key, key)).Where(added.Add)
+        return SortSettings.CategoryOrder.Select(GetMainCategory).Where(added.Add)
             .ToList();
     }
 

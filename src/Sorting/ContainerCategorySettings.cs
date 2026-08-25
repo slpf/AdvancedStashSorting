@@ -68,7 +68,7 @@ public static class ContainerCategorySettings
                 continue;
             }
 
-            HashSet<string> selected = new HashSet<string>(entry.Value?.Where(CategoryCatalog.IsContainerFilterCategory) ?? []);
+            HashSet<string> selected = NormalizeSelection(entry.Value);
 
             if (selected.Count == 0)
             {
@@ -84,6 +84,26 @@ public static class ContainerCategorySettings
         }
 
         return changed;
+    }
+
+    private static HashSet<string> NormalizeSelection(IEnumerable<string> categories)
+    {
+        HashSet<string> selected = [];
+
+        foreach (string category in categories ?? [])
+        {
+            if (category == "weapons")
+            {
+                selected.UnionWith(CategoryCatalog.DefaultOrder.Where(key =>
+                    CategoryCatalog.GetMainCategory(key) == "m_weapons"));
+            }
+            else if (CategoryCatalog.IsContainerFilterCategory(category))
+            {
+                selected.Add(category);
+            }
+        }
+
+        return selected;
     }
 
     private static bool SameSet(List<string> values, HashSet<string> selected)

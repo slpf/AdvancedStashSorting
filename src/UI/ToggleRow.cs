@@ -29,7 +29,7 @@ public class ToggleRow : MonoBehaviour, IPointerClickHandler
     }
 
     public static ToggleRow Create(Transform parent, string label, bool initial, Action<bool> onChange,
-        PhysicalPixelGrid pixelGrid)
+        PhysicalPixelGrid pixelGrid, string tooltip = null)
     {
         GameObject go = new GameObject("ToggleRow", typeof(RectTransform), typeof(Image), typeof(LayoutElement),
             typeof(CanvasGroup));
@@ -100,6 +100,12 @@ public class ToggleRow : MonoBehaviour, IPointerClickHandler
         row._value = initial;
         row._onChange = onChange;
 
+        if (!string.IsNullOrEmpty(tooltip))
+        {
+            HoverTooltipArea tooltipArea = go.AddComponent<HoverTooltipArea>();
+            tooltipArea.SetMessageText(tooltip, true);
+        }
+
         return row;
     }
 
@@ -110,7 +116,7 @@ public class ToggleRow : MonoBehaviour, IPointerClickHandler
         if (_canvasGroup != null)
         {
             _canvasGroup.interactable = interactable;
-            _canvasGroup.blocksRaycasts = interactable;
+            _canvasGroup.blocksRaycasts = true;
             _canvasGroup.alpha = interactable ? 1f : SortTheme.DisabledAlpha;
         }
     }
