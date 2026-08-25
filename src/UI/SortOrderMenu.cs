@@ -420,7 +420,7 @@ public static class SortOrderMenu
 
     private static bool ShouldAnchorSubMenuToBottom(string parent)
     {
-        if (parent != "m_weapon_mods") return false;
+        if (parent != "m_weapon_mods" && parent != "m_weapons") return false;
 
         List<string> mainOrder = CategoryCatalog.GetMainOrder();
         int index = mainOrder.IndexOf(parent);

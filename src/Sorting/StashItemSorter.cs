@@ -160,7 +160,12 @@ public static class StashItemSorter
         {
             templateIds[itemIndex] = source[itemIndex].TemplateId;
             if (primaryCategoryKeys != null)
-                primaryCategoryKeys[itemIndex] = ItemClassifier.Classify(source[itemIndex]);
+            {
+                string category = ItemClassifier.Classify(source[itemIndex]);
+                primaryCategoryKeys[itemIndex] = configuration.SeparatePrimaryGroups
+                    ? CategoryCatalog.GetMainCategory(category)
+                    : category;
+            }
         }
 
         for (int criterionIndex = 0; criterionIndex < configuration.Criteria.Count; criterionIndex++)

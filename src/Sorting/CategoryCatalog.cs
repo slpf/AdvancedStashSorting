@@ -27,8 +27,7 @@ public static class CategoryCatalog
         "sniper_rifles",
         "pistols",
         "revolvers",
-        "gr_launchers",
-        "special_weapons",
+        "other_weapons",
         "magazines",
         "headphones",
         "headwear",
@@ -91,8 +90,7 @@ public static class CategoryCatalog
         ["shotguns"] = "m_weapons",
         ["sniper_rifles"] = "m_weapons",
         ["submachine_guns"] = "m_weapons",
-        ["gr_launchers"] = "m_weapons",
-        ["special_weapons"] = "m_weapons",
+        ["other_weapons"] = "m_weapons",
         ["headwear"] = "m_headwear",
         ["face_covers"] = "m_headwear",
         ["visors"] = "m_headwear",
@@ -138,10 +136,21 @@ public static class CategoryCatalog
         return key != "containers" && DefaultOrder.Contains(key);
     }
 
+    public static string GetMainCategory(string key)
+    {
+        if (key == null) return null;
+
+        int remaining = ParentMap.Count;
+
+        while (remaining-- > 0 && ParentMap.TryGetValue(key, out string parent)) key = parent;
+
+        return key;
+    }
+
     public static List<string> GetMainOrder()
     {
         HashSet<string> added = [];
-        return SortSettings.CategoryOrder.Select(key => ParentMap.GetValueOrDefault(key, key)).Where(added.Add)
+        return SortSettings.CategoryOrder.Select(GetMainCategory).Where(added.Add)
             .ToList();
     }
 
