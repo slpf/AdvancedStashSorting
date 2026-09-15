@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using AdvancedStashSorting.Sorting;
 using Newtonsoft.Json;
 
 namespace AdvancedStashSorting;
@@ -47,9 +48,10 @@ public static class Localization
             ["rarity_custom_5"] = "Tier 5",
             ["rarity_custom_6"] = "Tier 6",
             ["rarity_custom_7"] = "Tier 7",
-            ["m_ammo_boxes"] = "Ammo / Boxes",
             ["ammo"] = "Ammo",
             ["ammo_boxes"] = "Ammo Boxes",
+            ["ammo_other"] = "Other calibers",
+            ["ammo_boxes_other"] = "Other calibers",
             ["m_meds"] = "Meds",
             ["medkits"] = "Medkits",
             ["drugs"] = "Drugs",
@@ -121,11 +123,15 @@ public static class Localization
 
     public static string Get(string key)
     {
+        if (AmmoCategoryCatalog.TryGetCaliberName(key, out string name)) return name;
+
         return GetRaw(key).ToUpperInvariant();
     }
 
     public static string GetRaw(string key)
     {
+        if (AmmoCategoryCatalog.TryGetCaliberName(key, out string name)) return name;
+
         return
             Locales.GetValueOrDefault(Culture)?.GetValueOrDefault(key) ??
             Locales.GetValueOrDefault("en")?.GetValueOrDefault(key) ??

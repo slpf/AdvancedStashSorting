@@ -19,6 +19,7 @@ namespace AdvancedStashSorting;
 
 [BepInPlugin(ModInfo.Guid, ModInfo.ClientName, ModInfo.Version)]
 [BepInDependency("com.tyfon.uifixes", BepInDependency.DependencyFlags.SoftDependency)]
+[BepInDependency(CaliberUnderNameCompat.PluginGuid, BepInDependency.DependencyFlags.SoftDependency)]
 public class Plugin : BaseUnityPlugin
 {
     public static ManualLogSource LogSource;

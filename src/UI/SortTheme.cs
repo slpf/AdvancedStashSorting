@@ -48,6 +48,7 @@ public static class SortTheme
     public static float HandleBarHeight => 1f;
     public static float HandleBarSpacing => 2f;
     public static float RowTextPadding => 8f;
+    public static float ScrollbarWidth => 8f;
     public static float ToggleBoxSize => 12f;
     public static float ToggleCheckThickness => 1.5f;
     public static int TagCategoryColumnCount => 4;
@@ -60,7 +61,7 @@ public static class SortTheme
     public static float TagCategoryMinimumWidth => 100f;
     public static float TagCategoryTitleFontSize => 13f;
     public static float TagCategoryCellFontSize => 8f;
-    public static float TagCategoryTextPadding => 3f;
+    public static float TagCategoryTextPadding => 8f;
     public static float TagCategorySubmenuWidth => 16f;
     public static float TagCategoryFilterPadding => 4f;
     public static float TagCategoryTogglePadding => 0f;

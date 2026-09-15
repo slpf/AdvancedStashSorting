@@ -13,6 +13,9 @@ public static class Config
 {
     private static string _configPath;
     private static bool _dirty;
+    private static bool _categoriesPending;
+    private static List<string> _pendingCategoryOrder;
+    private static Dictionary<string, List<string>> _pendingContainerCategories;
 
     private static readonly JsonSerializerSettings SerializerSettings = new()
     {
@@ -31,6 +34,9 @@ public static class Config
 
         _configPath = configPath;
         _dirty = false;
+        _categoriesPending = !AmmoCategoryCatalog.IsInitialized;
+        _pendingCategoryOrder = null;
+        _pendingContainerCategories = null;
 
         if (!File.Exists(_configPath))
         {
@@ -110,6 +116,34 @@ public static class Config
         Save();
     }
 
+    internal static void RefreshCategories()
+    {
+        if (!AmmoCategoryCatalog.IsInitialized) return;
+
+        List<string> order = _categoriesPending ? _pendingCategoryOrder : SortSettings.CategoryOrder;
+        Dictionary<string, List<string>> containerCategories = _categoriesPending
+            ? _pendingContainerCategories
+            : ContainerCategorySettings.Export();
+        bool changed = ApplyCategories(order, containerCategories);
+        _categoriesPending = false;
+        _pendingCategoryOrder = null;
+        _pendingContainerCategories = null;
+
+        if (!changed) return;
+
+        MarkDirty();
+        Save();
+    }
+
+    private static bool ApplyCategories(List<string> order, Dictionary<string, List<string>> containerCategories)
+    {
+        List<string> normalized = CategoryCatalog.NormalizeOrder(order);
+        bool changed = order == null || !order.SequenceEqual(normalized);
+        SortSettings.CategoryOrder = normalized;
+        changed |= ContainerCategorySettings.Load(containerCategories);
+        return changed;
+    }
+
     private static bool Apply(ConfigData data)
     {
         bool changed = false;
@@ -132,19 +166,22 @@ public static class Config
         SortSettings.SortOrder = NormalizeSortOrder(sort.SortOrder, out bool sortOrderChanged);
         changed |= sortOrderChanged;
 
-        List<string> normalizedCategoryOrder = CategoryCatalog.NormalizeOrder(sort.CategoryOrder);
+        if (_categoriesPending)
+        {
+            _pendingCategoryOrder = sort.CategoryOrder;
+            _pendingContainerCategories = data.ContainerCategories;
+        }
+        else
+        {
+            changed |= ApplyCategories(sort.CategoryOrder, data.ContainerCategories);
+        }
 
-        changed |= sort.CategoryOrder == null || !sort.CategoryOrder.SequenceEqual(normalizedCategoryOrder);
-
-        SortSettings.CategoryOrder = normalizedCategoryOrder;
         SortSettings.FoldingEnabled = sort.Fold;
         SortSettings.StackingEnabled = sort.Stack;
         SortSettings.NestingEnabled = sort.Nesting;
         SortSettings.RecursiveNestingEnabled = sort.RecursiveNesting;
         SortSettings.CompactSortingEnabled = sort.CompactSorting;
         SortSettings.SeparationEnabled = sort.Separation;
-
-        changed |= ContainerCategorySettings.Load(data.ContainerCategories);
 
         if (!Enum.IsDefined(typeof(RarityColorPreset), rarity.Preset))
         {
@@ -224,7 +261,9 @@ public static class Config
                         Type = setting.Type, Enabled = setting.Enabled, Direction = setting.Direction
                     })
                     .ToList(),
-                CategoryOrder = [..SortSettings.CategoryOrder],
+                CategoryOrder = _categoriesPending
+                    ? _pendingCategoryOrder ?? [..CategoryCatalog.DefaultOrder]
+                    : [..SortSettings.CategoryOrder],
                 Fold = SortSettings.FoldingEnabled,
                 Stack = SortSettings.StackingEnabled,
                 Nesting = SortSettings.NestingEnabled,
@@ -237,7 +276,9 @@ public static class Config
                 Preset = RaritySettings.ActivePreset,
                 CustomColors = [..RaritySettings.CustomColors]
             },
-            ContainerCategories = ContainerCategorySettings.Export()
+            ContainerCategories = _categoriesPending
+                ? _pendingContainerCategories ?? new Dictionary<string, List<string>>()
+                : ContainerCategorySettings.Export()
         };
     }
 

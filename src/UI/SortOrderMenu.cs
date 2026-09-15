@@ -28,12 +28,20 @@ public static class SortOrderMenu
     private static bool _localeSubscribed;
     private static string _currentParent;
     private static PhysicalPixelGrid _pixelGrid;
+    private static int _categoryVersion = -1;
+    private static int _caliberNamesVersion = -1;
     private static CycleSelector _rarityDirectionSelector;
     private static CycleSelector _rarityPresetSelector;
     private static readonly List<RarityColorRow> RarityColorRows = [];
 
     public static void Show(RectTransform buttonRect)
     {
+        AmmoCategoryCatalog.Refresh();
+
+        if (_root != null && (_categoryVersion != AmmoCategoryCatalog.Version ||
+                              _caliberNamesVersion != CaliberUnderNameCompat.Version))
+            DestroyMenu();
+
         Canvas sourceCanvas = FindSourceCanvas(buttonRect, out RectTransform hostParent);
 
         if (sourceCanvas == null || hostParent == null) return;
@@ -125,6 +133,8 @@ public static class SortOrderMenu
 
     private static void Build(Canvas sourceCanvas, RectTransform hostParent, float canvasScale)
     {
+        _categoryVersion = AmmoCategoryCatalog.Version;
+        _caliberNamesVersion = CaliberUnderNameCompat.Version;
         _sourceCanvas = sourceCanvas;
         _hostParent = hostParent;
         _pixelGrid = new PhysicalPixelGrid(canvasScale);
@@ -329,6 +339,8 @@ public static class SortOrderMenu
 
     private static void ShowSubCategories(string parent, ReorderRow row)
     {
+        CaliberUnderNameCompat.Refresh();
+
         HideSubMenu();
 
         List<string> subOrder = CategoryCatalog.GetSubOrder(parent);
@@ -354,7 +366,7 @@ public static class SortOrderMenu
             });
 
         ResizePanel(_subRootRect, _subContentRect);
-        ShowSubMenu(row.RectTransform, ShouldAnchorSubMenuToBottom(parent));
+        ShowScrollableSubMenu(row.RectTransform, ShouldAnchorSubMenuToBottom(parent));
     }
 
     private static void ShowRarityMenu(ReorderRow row)
@@ -425,6 +437,96 @@ public static class SortOrderMenu
         List<string> mainOrder = CategoryCatalog.GetMainOrder();
         int index = mainOrder.IndexOf(parent);
         return index >= 0 && index * 3 >= mainOrder.Count * 2;
+    }
+
+    private static void ShowScrollableSubMenu(RectTransform rowRect, bool anchorToBottom)
+    {
+        Canvas rootCanvas = _sourceCanvas != null ? _sourceCanvas.rootCanvas : null;
+        RectTransform canvasRect = rootCanvas != null ? rootCanvas.transform as RectTransform : null;
+
+        if (canvasRect == null || _hostRect == null)
+        {
+            HideSubMenu();
+            return;
+        }
+
+        Vector3[] corners = new Vector3[4];
+        canvasRect.GetWorldCorners(corners);
+        Vector2 minimum = new Vector2(float.PositiveInfinity, float.PositiveInfinity);
+        Vector2 maximum = new Vector2(float.NegativeInfinity, float.NegativeInfinity);
+
+        foreach (Vector3 corner in corners)
+        {
+            Vector2 point = _hostRect.InverseTransformPoint(corner);
+            minimum = Vector2.Min(minimum, point);
+            maximum = Vector2.Max(maximum, point);
+        }
+
+        float margin = _pixelGrid.Snap(SortTheme.Padding + SortTheme.BorderThickness);
+        minimum += Vector2.one * margin;
+        maximum -= Vector2.one * margin;
+        float padding = _pixelGrid.Snap(SortTheme.Padding);
+        float width = Mathf.Min(_subRootRect.rect.width, maximum.x - minimum.x);
+        float height = Mathf.Min(_subRootRect.rect.height, maximum.y - minimum.y);
+        float minimumHeight = padding * 2f + _pixelGrid.Snap(SortTheme.HeaderHeight) +
+                              _pixelGrid.Snap(SortTheme.Spacing) + _pixelGrid.Snap(SortTheme.CategoryRowHeight);
+
+        if (float.IsNaN(width) || float.IsInfinity(width) || float.IsNaN(height) || float.IsInfinity(height) ||
+            width <= padding * 2f || height < minimumHeight)
+        {
+            HideSubMenu();
+            return;
+        }
+
+        _subRootRect.pivot = new Vector2(0f, 1f);
+        _subRootRect.sizeDelta = new Vector2(width, height);
+
+        GameObject viewportObject = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(RectMask2D));
+        RectTransform viewport = viewportObject.GetComponent<RectTransform>();
+        viewport.SetParent(_subRootRect, false);
+        viewport.anchorMin = Vector2.zero;
+        viewport.anchorMax = Vector2.one;
+        viewport.offsetMin = Vector2.one * padding;
+        viewport.offsetMax = Vector2.one * -padding;
+        Image viewportImage = viewportObject.GetComponent<Image>();
+        viewportImage.color = SortTheme.Transparent;
+        viewportImage.raycastTarget = true;
+        _subContentRect.SetParent(viewport, false);
+        _subContentRect.anchoredPosition = Vector2.zero;
+        _subContentRect.sizeDelta = new Vector2(0f, _subContentRect.sizeDelta.y);
+
+        ScrollRect scroll = _subRoot.AddComponent<ScrollRect>();
+        scroll.viewport = viewport;
+        scroll.content = _subContentRect;
+        scroll.horizontal = false;
+        scroll.vertical = _subContentRect.rect.height > height - padding * 2f;
+        scroll.movementType = ScrollRect.MovementType.Clamped;
+        scroll.inertia = false;
+        scroll.scrollSensitivity = _pixelGrid.Snap(SortTheme.CategoryRowHeight) * 3f;
+        SubmenuScrollbar.Create(scroll, _pixelGrid);
+
+        rowRect.GetWorldCorners(corners);
+        Vector2 rowTopRight = _hostRect.InverseTransformPoint(corners[2]);
+        Vector2 rowBottomLeft = _hostRect.InverseTransformPoint(corners[0]);
+        float gap = _pixelGrid.Snap(SortTheme.Spacing + SortTheme.SubMenuOffset);
+        float left = rowTopRight.x + gap;
+
+        if (left + width > maximum.x) left = rowBottomLeft.x - gap - width;
+
+        left = Mathf.Clamp(left, minimum.x, maximum.x - width);
+        float top = anchorToBottom ? rowBottomLeft.y + height : rowTopRight.y;
+        top = Mathf.Clamp(top, minimum.y + height, maximum.y);
+        Vector3 position = _hostRect.TransformPoint(new Vector3(left, top, 0f));
+
+        if (!SetScreenPosition(_subRootRect, RectTransformUtility.WorldToScreenPoint(CanvasCamera(rootCanvas), position)))
+        {
+            HideSubMenu();
+            return;
+        }
+
+        LayoutRebuilder.ForceRebuildLayoutImmediate(_subContentRect);
+        _subRoot.transform.SetAsLastSibling();
+        _overlay.transform.SetAsLastSibling();
     }
 
     private static void ToggleRarityDirection()

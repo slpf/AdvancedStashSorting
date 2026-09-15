@@ -12,6 +12,7 @@ public sealed class TagCategoryDropdown : MonoBehaviour
     private readonly List<ToggleRow> _rows = [];
     private readonly Vector3[] _corners = new Vector3[4];
     private RectTransform _anchor;
+    private RectTransform _categoryTile;
     private bool _closed;
     private RectTransform _content;
     private float _contentHeight;
@@ -19,6 +20,7 @@ public sealed class TagCategoryDropdown : MonoBehaviour
     private Action _onClose;
     private Action<string> _onToggle;
     private int _openedFrame;
+    private bool _pointerStartedInside;
     private RectTransform _owner;
     private CanvasGroup[] _ownerGroups;
     private RectTransform _panel;
@@ -26,8 +28,10 @@ public sealed class TagCategoryDropdown : MonoBehaviour
     private Canvas _rootCanvas;
     private RectTransform _rootRect;
     private ScrollRect _scroll;
+    private SubmenuScrollbar _scrollbar;
 
-    public static TagCategoryDropdown Create(RectTransform owner, RectTransform anchor, TMP_FontAsset font,
+    public static TagCategoryDropdown Create(RectTransform owner, RectTransform anchor, RectTransform categoryTile,
+        TMP_FontAsset font,
         string title, IReadOnlyList<string> categories, Func<string, bool> isSelected, Action<string> onToggle,
         Action onClose)
     {
@@ -37,7 +41,7 @@ public sealed class TagCategoryDropdown : MonoBehaviour
 
         if (onToggle == null) throw new ArgumentNullException(nameof(onToggle));
 
-        if (owner == null || anchor == null || categories.Count == 0 || !owner.gameObject.activeInHierarchy ||
+        if (owner == null || anchor == null || categoryTile == null || categories.Count == 0 || !owner.gameObject.activeInHierarchy ||
             !anchor.gameObject.activeInHierarchy)
             return null;
 
@@ -75,6 +79,7 @@ public sealed class TagCategoryDropdown : MonoBehaviour
         TagCategoryDropdown result = host.AddComponent<TagCategoryDropdown>();
         result._owner = owner;
         result._anchor = anchor;
+        result._categoryTile = categoryTile;
         result._rootCanvas = rootCanvas;
         result._rootRect = rootRect;
         result._pixelGrid = new PhysicalPixelGrid(rootCanvas.scaleFactor);
@@ -143,13 +148,21 @@ public sealed class TagCategoryDropdown : MonoBehaviour
             return;
         }
 
+        Camera camera = _rootCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : _rootCanvas.worldCamera;
+        bool inside = RectTransformUtility.RectangleContainsScreenPoint(_panel, Input.mousePosition, camera) ||
+                      RectTransformUtility.RectangleContainsScreenPoint(_categoryTile, Input.mousePosition, camera);
+
+        if (Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1) || Input.GetMouseButtonDown(2))
+            _pointerStartedInside = inside;
+
         if (Time.frameCount == _openedFrame ||
             !(Input.GetMouseButtonUp(0) || Input.GetMouseButtonUp(1) || Input.GetMouseButtonUp(2)))
             return;
 
-        Camera camera = _rootCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : _rootCanvas.worldCamera;
+        bool keepOpen = inside || _pointerStartedInside;
+        _pointerStartedInside = false;
 
-        if (!RectTransformUtility.RectangleContainsScreenPoint(_panel, Input.mousePosition, camera)) Close();
+        if (!keepOpen) Close();
     }
 
     private void OnDisable()
@@ -164,7 +177,7 @@ public sealed class TagCategoryDropdown : MonoBehaviour
 
     private bool IsOwnerVisible()
     {
-        if (_owner == null || _anchor == null || _rootCanvas == null || !_rootCanvas.isActiveAndEnabled ||
+        if (_owner == null || _anchor == null || _categoryTile == null || _rootCanvas == null || !_rootCanvas.isActiveAndEnabled ||
             !_owner.gameObject.activeInHierarchy || !_anchor.gameObject.activeInHierarchy)
             return false;
 
@@ -257,6 +270,7 @@ public sealed class TagCategoryDropdown : MonoBehaviour
                          Mathf.Max(0, _categories.Count - 1) * spacing;
         _content.sizeDelta = new Vector2(0f, _contentHeight);
         _scroll.content = _content;
+        _scrollbar = SubmenuScrollbar.Create(_scroll, _pixelGrid);
 
         VerticalLayoutGroup layout = contentObject.GetComponent<VerticalLayoutGroup>();
         layout.padding = new RectOffset();
@@ -270,7 +284,7 @@ public sealed class TagCategoryDropdown : MonoBehaviour
         {
             string category = _categories[i];
             ToggleRow row = ToggleRow.Create(_content, Localization.Get(category), _isSelected(category),
-                _ => Toggle(category), _pixelGrid);
+                _ => Toggle(category), _pixelGrid, leftPadding: SortTheme.TagCategoryTextPadding);
             row.GetComponent<Image>().color = SortTheme.CategoryRowBg;
             TextMeshProUGUI label = row.GetComponentInChildren<TextMeshProUGUI>();
 
@@ -302,7 +316,7 @@ public sealed class TagCategoryDropdown : MonoBehaviour
         labelRect.anchorMin = Vector2.zero;
         labelRect.anchorMax = Vector2.one;
         float textPadding = _pixelGrid.Snap(SortTheme.HeaderTextPadding);
-        labelRect.offsetMin = new Vector2(_pixelGrid.Snap(SortTheme.RowTextPadding), textPadding);
+        labelRect.offsetMin = new Vector2(_pixelGrid.Snap(SortTheme.TagCategoryTextPadding), textPadding);
         labelRect.offsetMax = new Vector2(-textPadding, -textPadding);
         TextMeshProUGUI label = labelObject.AddComponent<TextMeshProUGUI>();
         UiLayout.SetDefaultFont(label);
@@ -335,7 +349,7 @@ public sealed class TagCategoryDropdown : MonoBehaviour
 
         _anchor.GetWorldCorners(_corners);
         float anchorLeft = float.PositiveInfinity;
-        float anchorBottom = float.PositiveInfinity;
+        float anchorRight = float.NegativeInfinity;
         float anchorTop = float.NegativeInfinity;
 
         for (int i = 0; i < _corners.Length; i++)
@@ -345,28 +359,25 @@ public sealed class TagCategoryDropdown : MonoBehaviour
             if (!IsFinite(corner.x) || !IsFinite(corner.y)) return false;
 
             anchorLeft = Mathf.Min(anchorLeft, corner.x);
-            anchorBottom = Mathf.Min(anchorBottom, corner.y);
+            anchorRight = Mathf.Max(anchorRight, corner.x);
             anchorTop = Mathf.Max(anchorTop, corner.y);
         }
 
         float lowerBound = bounds.yMin + margin;
         float upperBound = bounds.yMax - margin;
-        float gap = _pixelGrid.Snap(SortTheme.SubMenuOffset);
-        float below = Mathf.Max(0f, anchorBottom - gap - lowerBound);
-        float above = Mathf.Max(0f, upperBound - anchorTop - gap);
+        float gap = _pixelGrid.Snap(SortTheme.Spacing + SortTheme.SubMenuOffset);
         float desiredHeight = fixedHeight + _contentHeight;
-        bool openAbove = below < desiredHeight && above > below;
-        float availableHeight = openAbove ? above : below;
+        float height = Mathf.Min(desiredHeight, maximumHeight);
+        float left = anchorRight + gap;
 
-        if (availableHeight < minimumHeight) availableHeight = maximumHeight;
+        if (left + width > bounds.xMax - margin) left = anchorLeft - gap - width;
 
-        float height = Mathf.Min(desiredHeight, maximumHeight, availableHeight);
-        float left = Mathf.Clamp(anchorLeft, bounds.xMin + margin, bounds.xMax - margin - width);
-        float top = openAbove ? anchorTop + gap + height : anchorBottom - gap;
-        top = Mathf.Clamp(top, lowerBound + height, upperBound);
+        left = Mathf.Clamp(left, bounds.xMin + margin, bounds.xMax - margin - width);
+        float top = Mathf.Clamp(anchorTop, lowerBound + height, upperBound);
         _panel.sizeDelta = new Vector2(width, height);
         _panel.anchoredPosition = new Vector2(left, top);
         _scroll.vertical = _contentHeight > height - fixedHeight;
+        _scrollbar.SetVisible(_scroll.vertical);
         return true;
     }
 

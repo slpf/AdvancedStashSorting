@@ -29,6 +29,9 @@ public class ReorderableList : MonoBehaviour
     private RectTransform _content;
     private bool _dragActive;
     private ReorderRow _draggedRow;
+    private PointerEventData _dragPointer;
+    private readonly Vector3[] _viewportCorners = new Vector3[4];
+    private ScrollRect _scroll;
 
     private float _dragOriginContentX;
     private float _dragOriginZ;
@@ -45,6 +48,43 @@ public class ReorderableList : MonoBehaviour
     private void OnDisable()
     {
         CancelDrag();
+    }
+
+    private void LateUpdate()
+    {
+        if (!_dragActive || _dragPointer == null || _scroll == null || !_scroll.vertical ||
+            _scroll.viewport == null || _scroll.content == null)
+            return;
+
+        RectTransform viewport = _scroll.viewport;
+        float hiddenHeight = _scroll.content.rect.height - viewport.rect.height;
+
+        if (hiddenHeight <= 0f || !RectTransformUtility.ScreenPointToLocalPointInRectangle(viewport,
+                _dragPointer.position, _dragPointer.pressEventCamera, out Vector2 pointer))
+            return;
+
+        Rect bounds = viewport.rect;
+
+        if (pointer.x < bounds.xMin || pointer.x > bounds.xMax) return;
+
+        float edge = Mathf.Min(_pixelGrid.Snap(SortTheme.CategoryRowHeight), bounds.height * 0.25f);
+
+        if (edge <= 0f) return;
+
+        float direction = pointer.y < bounds.yMin + edge
+            ? -Mathf.Clamp01((bounds.yMin + edge - pointer.y) / edge)
+            : pointer.y > bounds.yMax - edge ? Mathf.Clamp01((pointer.y - bounds.yMax + edge) / edge) : 0f;
+
+        if (Mathf.Approximately(direction, 0f)) return;
+
+        float position = _scroll.verticalNormalizedPosition;
+        float speed = _pixelGrid.Snap(SortTheme.CategoryRowHeight) * 12f;
+        float next = Mathf.Clamp01(position + direction * speed * Time.unscaledDeltaTime / hiddenHeight);
+
+        if (Mathf.Approximately(position, next)) return;
+
+        _scroll.verticalNormalizedPosition = next;
+        UpdateDraggedRow(_draggedRow, _dragPointer);
     }
 
     public static void Create<T>(Transform parent, Transform overlay, IReadOnlyList<T> items,
@@ -201,17 +241,7 @@ public class ReorderableList : MonoBehaviour
         layoutElement.minWidth = handleWidth;
         layoutElement.flexibleHeight = 1f;
 
-        GameObject chevron = new GameObject("SubmenuButton", typeof(RectTransform), typeof(ChevronGraphic));
-        chevron.transform.SetParent(container.transform, false);
-        RectTransform chevronRect = chevron.GetComponent<RectTransform>();
-        chevronRect.anchorMin = new Vector2(0.5f, 0.5f);
-        chevronRect.anchorMax = new Vector2(0.5f, 0.5f);
-        chevronRect.pivot = new Vector2(0.5f, 0.5f);
-        chevronRect.sizeDelta = new Vector2(handleWidth, handleWidth);
-        chevronRect.anchoredPosition = Vector2.zero;
-
-        ChevronGraphic graphic = chevron.GetComponent<ChevronGraphic>();
-        graphic.Init(_pixelGrid.Snap(SortTheme.ToggleCheckThickness), SortTheme.HandleColor);
+        ChevronGraphic graphic = ChevronGraphic.Create(container.transform);
         row.SetSubmenuChevron(graphic);
 
         if (onClick != null)
@@ -299,6 +329,9 @@ public class ReorderableList : MonoBehaviour
 
         _onBeginDrag?.Invoke();
 
+        _scroll = _content.GetComponentInParent<ScrollRect>();
+        _scroll?.StopMovement();
+
         _overlay.SetAsLastSibling();
 
         int index = row.transform.GetSiblingIndex();
@@ -326,10 +359,30 @@ public class ReorderableList : MonoBehaviour
     {
         if (!_dragActive || row != _draggedRow || _placeholder == null) return;
 
+        _dragPointer = eventData;
+        UpdateDraggedRow(row, eventData);
+    }
+
+    private void UpdateDraggedRow(ReorderRow row, PointerEventData eventData)
+    {
         if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(_content, eventData.position,
                 eventData.pressEventCamera, out Vector2 local)) return;
 
-        float clampedY = Mathf.Clamp(local.y, _listMinY, _listMaxY);
+        float minimum = _listMinY;
+        float maximum = _listMaxY;
+
+        if (_scroll != null && _scroll.viewport != null)
+        {
+            _scroll.viewport.GetWorldCorners(_viewportCorners);
+            float halfRow = row.RectTransform.rect.height * 0.5f;
+            float bottom = _content.InverseTransformPoint(_viewportCorners[0]).y;
+            float top = _content.InverseTransformPoint(_viewportCorners[1]).y;
+            minimum = Mathf.Max(minimum, bottom + halfRow);
+            maximum = Mathf.Min(maximum, top - halfRow);
+            local.y = Mathf.Clamp(local.y, bottom, top);
+        }
+
+        float clampedY = Mathf.Clamp(local.y, minimum, maximum);
         Vector3 world = _content.TransformPoint(new Vector3(_dragOriginContentX, clampedY, 0f));
         row.transform.position = new Vector3(world.x, world.y, _dragOriginZ);
 
@@ -426,6 +479,8 @@ public class ReorderableList : MonoBehaviour
     private void ClearDragState()
     {
         _draggedRow = null;
+        _dragPointer = null;
+        _scroll = null;
         _dragStartIndex = -1;
         _dragActive = false;
     }
@@ -543,6 +598,77 @@ public class ChevronGraphic : MaskableGraphic
 {
     private bool _pointsLeft;
     private float _thickness;
+    private RectTransform _parentRect;
+    private Transform _referenceTransform;
+    private Canvas _referenceCanvas;
+    private Canvas _rootCanvas;
+
+    public static ChevronGraphic Create(Transform parent)
+    {
+        GameObject arrow = new GameObject("SubmenuButton", typeof(RectTransform), typeof(ChevronGraphic));
+        RectTransform rect = arrow.GetComponent<RectTransform>();
+        rect.SetParent(parent, false);
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = Vector2.zero;
+
+        ChevronGraphic graphic = arrow.GetComponent<ChevronGraphic>();
+        graphic._parentRect = parent as RectTransform;
+        Canvas sourceCanvas = parent.GetComponentInParent<Canvas>();
+        graphic._rootCanvas = sourceCanvas != null ? sourceCanvas.rootCanvas : null;
+        RectTransform contextArea = ItemUiContext.Instance != null ? ItemUiContext.Instance.ContextMenuArea : null;
+        graphic._referenceTransform = contextArea != null && contextArea.gameObject.activeInHierarchy
+            ? contextArea
+            : parent;
+        Canvas referenceCanvas = graphic._referenceTransform.GetComponentInParent<Canvas>();
+        graphic._referenceCanvas = referenceCanvas != null ? referenceCanvas.rootCanvas : null;
+        graphic.Init(SortTheme.ToggleCheckThickness, SortTheme.HandleColor);
+        graphic.UpdateLayout();
+        return graphic;
+    }
+
+    private void LateUpdate()
+    {
+        UpdateLayout();
+    }
+
+    private void UpdateLayout()
+    {
+        if (_parentRect == null || _referenceTransform == null) return;
+
+        PhysicalPixelGrid pixelGrid = new(_referenceCanvas != null ? _referenceCanvas.scaleFactor : 1f);
+        float size = pixelGrid.Snap(SortTheme.HandleWidth);
+        Vector2 dimensions = new(size, size);
+
+        if (rectTransform.sizeDelta != dimensions) rectTransform.sizeDelta = dimensions;
+
+        float thickness = pixelGrid.Snap(SortTheme.ToggleCheckThickness);
+
+        if (!Mathf.Approximately(_thickness, thickness)) Init(thickness, color);
+
+        Vector3 parentScale = _parentRect.lossyScale;
+        Vector3 referenceScale = _referenceTransform.lossyScale;
+
+        if (Mathf.Abs(parentScale.x) < 0.001f || Mathf.Abs(parentScale.y) < 0.001f) return;
+
+        Vector3 scale = new(Mathf.Abs(referenceScale.x / parentScale.x), Mathf.Abs(referenceScale.y / parentScale.y), 1f);
+
+        if (rectTransform.localScale != scale) rectTransform.localScale = scale;
+
+        Camera camera = _rootCanvas != null && _rootCanvas.renderMode != RenderMode.ScreenSpaceOverlay
+            ? _rootCanvas.worldCamera
+            : null;
+        Vector2 screenCenter = RectTransformUtility.WorldToScreenPoint(camera, _parentRect.TransformPoint(_parentRect.rect.center));
+
+        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(_parentRect,
+                PhysicalPixelGrid.SnapScreenPoint(screenCenter), camera, out Vector2 localCenter))
+        {
+            Vector2 position = localCenter - _parentRect.rect.center;
+
+            if (rectTransform.anchoredPosition != position) rectTransform.anchoredPosition = position;
+        }
+    }
 
     public void Init(float thickness, Color chevronColor)
     {
@@ -569,15 +695,25 @@ public class ChevronGraphic : MaskableGraphic
 
         float size = availableSize * 0.50f;
         Vector2 center = rect.center;
-        float horizontalDirection = _pointsLeft ? -1f : 1f;
-        float backX = center.x - horizontalDirection * size * 0.25f;
-        float pointX = center.x + horizontalDirection * size * 0.25f;
+        float backX = center.x - size * 0.25f;
+        float pointX = center.x + size * 0.25f;
         Vector2 top = new Vector2(backX, center.y + size * 0.5f);
         Vector2 middle = new Vector2(pointX, center.y);
         Vector2 bottom = new Vector2(backX, center.y - size * 0.5f);
         Color32 vertexColor = color;
 
         AddButton(vertexHelper, top, middle, bottom, _thickness, vertexColor);
+
+        if (!_pointsLeft) return;
+
+        UIVertex vertex = UIVertex.simpleVert;
+
+        for (int i = 0; i < vertexHelper.currentVertCount; i++)
+        {
+            vertexHelper.PopulateUIVertex(ref vertex, i);
+            vertex.position = new Vector3(2f * center.x - vertex.position.x, 2f * center.y - vertex.position.y, 0f);
+            vertexHelper.SetUIVertex(vertex, i);
+        }
     }
 
     private static void AddButton(VertexHelper vertexHelper, Vector2 top, Vector2 middle, Vector2 bottom,

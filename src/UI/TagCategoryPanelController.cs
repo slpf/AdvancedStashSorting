@@ -612,7 +612,9 @@ public sealed class TagCategoryPanelController : MonoBehaviour
 
         if (wasOpen || _root == null || !_availableByMain.TryGetValue(button.Category, out List<string> children)) return;
 
-        _dropdown = TagCategoryDropdown.Create(_root, button.GetComponent<RectTransform>(), font,
+        CaliberUnderNameCompat.Refresh();
+
+        _dropdown = TagCategoryDropdown.Create(_root, button.DropdownAnchor, button.GetComponent<RectTransform>(), font,
             Localization.Get(button.Category), children, category => _selection != null && _selection.Contains(category),
             ToggleCategory, OnDropdownClosed);
 
@@ -642,11 +644,12 @@ public sealed class TagCategoryButton : MonoBehaviour
 {
     private Image _background;
     private Button _dropdownControl;
-    private TagDropdownArrowGraphic _dropdownArrow;
+    private ChevronGraphic _dropdownArrow;
     private TextMeshProUGUI _label;
     private Action<string> _onClick;
 
     public string Category { get; private set; }
+    public RectTransform DropdownAnchor => _dropdownControl != null ? _dropdownControl.transform as RectTransform : null;
 
     public static TagCategoryButton Create(Transform parent, string category, string label, TMP_FontAsset font,
         Action<string> onClick)
@@ -710,17 +713,7 @@ public sealed class TagCategoryButton : MonoBehaviour
             onClick?.Invoke();
         });
 
-        GameObject arrowObject = new GameObject("Arrow", typeof(RectTransform), typeof(TagDropdownArrowGraphic));
-        arrowObject.transform.SetParent(rect, false);
-        RectTransform arrowRect = arrowObject.GetComponent<RectTransform>();
-        arrowRect.anchorMin = new Vector2(0.5f, 0.5f);
-        arrowRect.anchorMax = new Vector2(0.5f, 0.5f);
-        arrowRect.pivot = new Vector2(0.5f, 0.5f);
-        arrowRect.sizeDelta = new Vector2(pixelGrid.Snap(SortTheme.HandleWidth * 2f / 3f),
-            pixelGrid.Snap(SortTheme.HandleWidth / 3f));
-        _dropdownArrow = arrowObject.GetComponent<TagDropdownArrowGraphic>();
-        _dropdownArrow.color = SortTheme.CategoryText;
-        _dropdownArrow.raycastTarget = false;
+        _dropdownArrow = ChevronGraphic.Create(rect);
     }
 
     public void SetDropdownOpen(bool open)
@@ -760,36 +753,5 @@ public sealed class TagCategoryButton : MonoBehaviour
     {
         UiSound.Play(EUISoundType.MenuCheckBox);
         _onClick?.Invoke(Category);
-    }
-}
-
-public sealed class TagDropdownArrowGraphic : MaskableGraphic
-{
-    private bool _open;
-
-    public void SetOpen(bool open)
-    {
-        if (_open == open) return;
-
-        _open = open;
-        SetVerticesDirty();
-    }
-
-    protected override void OnPopulateMesh(VertexHelper vertexHelper)
-    {
-        vertexHelper.Clear();
-
-        Rect rect = rectTransform.rect;
-        float baseY = _open ? rect.yMin : rect.yMax;
-        float tipY = _open ? rect.yMax : rect.yMin;
-        UIVertex vertex = UIVertex.simpleVert;
-        vertex.color = color;
-        vertex.position = new Vector2(rect.xMin, baseY);
-        vertexHelper.AddVert(vertex);
-        vertex.position = new Vector2(rect.xMax, baseY);
-        vertexHelper.AddVert(vertex);
-        vertex.position = new Vector2(rect.center.x, tipY);
-        vertexHelper.AddVert(vertex);
-        vertexHelper.AddTriangle(0, 1, 2);
     }
 }

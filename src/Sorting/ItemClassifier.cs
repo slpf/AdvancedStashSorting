@@ -19,8 +19,8 @@ public static class ItemClassifier
     private static readonly (Type Type, string Category)[] CategoryByType =
     [
         (typeof(SimpleContainer), "containers"),
-        (typeof(Ammo), "ammo"),
-        (typeof(AmmoBox), "ammo_boxes"),
+        (typeof(Ammo), "ammo_other"),
+        (typeof(AmmoBox), "ammo_boxes_other"),
         (typeof(ThrowWeap), "grenades"),
         (typeof(MedKit), "medkits"),
         (typeof(Stimulator), "stimulators"),
@@ -89,7 +89,9 @@ public static class ItemClassifier
     {
         if (item == null) return "other";
 
-        if (TryClassifyTemplate(item.TemplateId.ToString(), out string category)) return category;
+        if (TryClassifyAmmo(item.Template, out string category)) return category;
+
+        if (TryClassifyTemplate(item.TemplateId.ToString(), out category)) return category;
 
         foreach (IItemComponent component in item.Components)
             if (component != null && TryClassifyItemComponent(component.GetType(), out category))
@@ -102,13 +104,33 @@ public static class ItemClassifier
     {
         if (itemTemplate == null) return ClassifyType(itemType);
 
-        if (TryClassifyTemplate(itemTemplate._id.ToString(), out string category)) return category;
+        if (TryClassifyAmmo(itemTemplate, out string category)) return category;
+
+        if (TryClassifyTemplate(itemTemplate._id.ToString(), out category)) return category;
 
         if (itemTemplate is BarterOtherTemplate { DogTagQualities: true } &&
             TryClassifyItemComponent(typeof(DogtagComponent), out category))
             return category;
 
         return ClassifyType(itemType);
+    }
+
+    private static bool TryClassifyAmmo(ItemTemplate itemTemplate, out string category)
+    {
+        if (itemTemplate is AmmoTemplate ammoTemplate)
+        {
+            category = AmmoCategoryCatalog.GetCategory("ammo", ammoTemplate.Caliber);
+            return true;
+        }
+
+        if (itemTemplate is AmmoBoxTemplate ammoBoxTemplate)
+        {
+            category = AmmoCategoryCatalog.GetCategory("ammo_boxes", AmmoCaliberResolver.GetCaliber(ammoBoxTemplate));
+            return true;
+        }
+
+        category = null;
+        return false;
     }
 
     private static bool TryClassifyTemplate(string templateId, out string category)

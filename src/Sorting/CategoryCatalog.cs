@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -9,8 +10,8 @@ public static class CategoryCatalog
     [
         "containers",
         "money",
-        "ammo",
-        "ammo_boxes",
+        "ammo_other",
+        "ammo_boxes_other",
         "grenades",
         "medkits",
         "drugs",
@@ -73,8 +74,8 @@ public static class CategoryCatalog
 
     public static readonly Dictionary<string, string> ParentMap = new()
     {
-        ["ammo"] = "m_ammo_boxes",
-        ["ammo_boxes"] = "m_ammo_boxes",
+        ["ammo_other"] = "ammo",
+        ["ammo_boxes_other"] = "ammo_boxes",
         ["medkits"] = "m_meds",
         ["drugs"] = "m_meds",
         ["stimulators"] = "m_meds",
@@ -126,6 +127,40 @@ public static class CategoryCatalog
 
     private static readonly HashSet<string> ParentKeys = ParentMap.Values.ToHashSet();
 
+    internal static void SetAmmoCalibers(IEnumerable<string> ammoCalibers, IEnumerable<string> boxCalibers)
+    {
+        foreach (string category in ParentMap.Keys.Where(key => key.StartsWith("ammo:", StringComparison.Ordinal) ||
+                                                               key.StartsWith("ammo_boxes:", StringComparison.Ordinal))
+                     .ToList())
+        {
+            ParentMap.Remove(category);
+            DefaultOrder.Remove(category);
+        }
+
+        foreach (string parent in new[] { "ammo", "ammo_boxes" })
+        {
+            int index = DefaultOrder.IndexOf(parent + "_other");
+
+            foreach (string caliber in parent == "ammo" ? ammoCalibers : boxCalibers)
+            {
+                string category = parent + ":" + caliber;
+                DefaultOrder.Insert(index++, category);
+                ParentMap[category] = parent;
+            }
+        }
+    }
+
+    internal static IEnumerable<string> ExpandLegacyCategory(string category)
+    {
+        if (category is "ammo" or "ammo_boxes")
+            return DefaultOrder.Where(key => GetMainCategory(key) == category);
+
+        if (category == "m_ammo_boxes")
+            return DefaultOrder.Where(key => GetMainCategory(key) is "ammo" or "ammo_boxes");
+
+        return [category];
+    }
+
     public static bool HasChildren(string key)
     {
         return ParentKeys.Contains(key);
@@ -164,9 +199,21 @@ public static class CategoryCatalog
         HashSet<string> known = new HashSet<string>(DefaultOrder);
         HashSet<string> added = [];
 
-        List<string> normalized = order?.Where(key => key != null && known.Contains(key) && added.Add(key)).ToList() ??
-                                  [];
-        normalized.AddRange(DefaultOrder.Where(added.Add));
+        List<string> normalized = order?.SelectMany(ExpandLegacyCategory)
+            .Where(key => key != null && known.Contains(key) && added.Add(key)).ToList() ?? [];
+
+        foreach (string category in DefaultOrder.Where(added.Add))
+        {
+            string main = GetMainCategory(category);
+            int index = main is "ammo" or "ammo_boxes"
+                ? normalized.FindLastIndex(key => GetMainCategory(key) == main)
+                : -1;
+
+            if (index >= 0)
+                normalized.Insert(normalized[index] == main + "_other" ? index : index + 1, category);
+            else
+                normalized.Add(category);
+        }
 
         return normalized;
     }

@@ -39,6 +39,7 @@ public class SortPreparationPatch : ModulePatch
         if (!IsInventorySortPanel(__instance, ____item))
             return true;
 
+        AmmoCategoryCatalog.Refresh();
         bool foldingEnabled = SortSettings.FoldingEnabled;
         bool stackingEnabled = SortSettings.StackingEnabled;
         bool nestingEnabled = SortSettings.NestingEnabled;

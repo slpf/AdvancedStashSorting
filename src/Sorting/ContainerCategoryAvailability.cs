@@ -11,10 +11,20 @@ public static class ContainerCategoryAvailability
     private static readonly Dictionary<string, List<string>> Cache = new();
 
     private static Dictionary<string, List<CategoryProbe>> _categoryProbes;
+    private static int _catalogVersion = -1;
 
     public static List<string> GetAvailable(CompoundItem container)
     {
         if (!ContainerNesting.CanConfigureCategories(container)) return [];
+
+        AmmoCategoryCatalog.Refresh();
+
+        if (_catalogVersion != AmmoCategoryCatalog.Version)
+        {
+            Cache.Clear();
+            _categoryProbes = null;
+            _catalogVersion = AmmoCategoryCatalog.Version;
+        }
 
         if (Cache.TryGetValue(container.TemplateId, out List<string> cached)) return [..cached];
 
@@ -90,23 +100,49 @@ public static class ContainerCategoryAvailability
             if (entry.Value == null || entry.Value._type != NodeType.Item) continue;
 
             MongoID? parentId = entry.Value.ParentId;
+            Type itemType = null;
 
-            if (parentId == null || !JsonTypes.TypeTable.TryGetValue(parentId.Value, out Type itemType)) continue;
+            if (parentId != null) JsonTypes.TypeTable.TryGetValue(parentId.Value, out itemType);
+
+            itemType ??= entry.Value switch
+            {
+                AmmoTemplate => typeof(Ammo),
+                AmmoBoxTemplate => typeof(AmmoBox),
+                _ => null
+            };
+
+            if (itemType == null) continue;
 
             string category = ItemClassifier.Classify(entry.Value, itemType);
 
             if (!CategoryCatalog.DefaultOrder.Contains(category)) continue;
 
-            if (!categoryProbes.TryGetValue(category, out List<CategoryProbe> probes))
-            {
-                probes = [];
-                categoryProbes[category] = probes;
-            }
+            CategoryProbe probe = new(entry.Key.ToString(), itemType);
+            AddProbe(categoryProbes, category, probe);
 
-            probes.Add(new CategoryProbe(entry.Key.ToString(), itemType));
+            string fallback = entry.Value switch
+            {
+                AmmoTemplate => "ammo_other",
+                AmmoBoxTemplate => "ammo_boxes_other",
+                _ => null
+            };
+
+            if (fallback != null && fallback != category) AddProbe(categoryProbes, fallback, probe);
         }
 
         _categoryProbes = categoryProbes;
+    }
+
+    private static void AddProbe(Dictionary<string, List<CategoryProbe>> categoryProbes, string category,
+        CategoryProbe probe)
+    {
+        if (!categoryProbes.TryGetValue(category, out List<CategoryProbe> probes))
+        {
+            probes = [];
+            categoryProbes[category] = probes;
+        }
+
+        probes.Add(probe);
     }
 
     private sealed class CategoryProbe(string templateId, Type itemType)

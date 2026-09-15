@@ -29,7 +29,7 @@ public class ToggleRow : MonoBehaviour, IPointerClickHandler
     }
 
     public static ToggleRow Create(Transform parent, string label, bool initial, Action<bool> onChange,
-        PhysicalPixelGrid pixelGrid, string tooltip = null)
+        PhysicalPixelGrid pixelGrid, string tooltip = null, float? leftPadding = null)
     {
         GameObject go = new GameObject("ToggleRow", typeof(RectTransform), typeof(Image), typeof(LayoutElement),
             typeof(CanvasGroup));
@@ -43,7 +43,7 @@ public class ToggleRow : MonoBehaviour, IPointerClickHandler
 
         RectTransform rowContent = UiLayout.CreateHorizontalContent(
             rowRect,
-            pixelGrid.Snap(SortTheme.RowTextPadding),
+            pixelGrid.Snap(leftPadding ?? SortTheme.RowTextPadding),
             pixelGrid.Snap(6f),
             pixelGrid.Snap(8f),
             false,

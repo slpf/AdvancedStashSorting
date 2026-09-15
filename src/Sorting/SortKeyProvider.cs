@@ -12,6 +12,7 @@ public static class SortKeyProvider
 
     public static Dictionary<string, int> BuildCategoryIndex()
     {
+        AmmoCategoryCatalog.Refresh();
         Dictionary<string, int> result = new Dictionary<string, int>();
 
         for (int i = 0; i < SortSettings.CategoryOrder.Count; i++)

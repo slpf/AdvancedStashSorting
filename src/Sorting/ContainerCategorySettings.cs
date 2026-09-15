@@ -90,7 +90,7 @@ public static class ContainerCategorySettings
     {
         HashSet<string> selected = [];
 
-        foreach (string category in categories ?? [])
+        foreach (string category in (categories ?? []).SelectMany(CategoryCatalog.ExpandLegacyCategory))
         {
             if (category == "weapons")
             {
