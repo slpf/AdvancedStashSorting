@@ -54,8 +54,6 @@ public static class SortTheme
     public static float TagCategoryHorizontalMargin => 2f;
     public static float TagCategoryTopPadding => 12f;
     public static float TagCategorySectionSpacing => 2f;
-    public static float TagCategoryGroupDividerHeight => 1f;
-    public static float TagCategoryGroupDividerHorizontalMargin => 4f;
     public static float TagCategoryGridSpacing => 2f;
     public static float TagCategoryTitleHeight => 17f;
     public static float TagCategoryCellHeight => 20f;
@@ -63,6 +61,7 @@ public static class SortTheme
     public static float TagCategoryTitleFontSize => 13f;
     public static float TagCategoryCellFontSize => 8f;
     public static float TagCategoryTextPadding => 3f;
+    public static float TagCategorySubmenuWidth => 16f;
     public static float TagCategoryFilterPadding => 4f;
     public static float TagCategoryTogglePadding => 0f;
     public static float TagCategoryHeaderIconSize => 14f;

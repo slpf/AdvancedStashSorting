@@ -15,10 +15,11 @@ public sealed class TagCategoryPanelController : MonoBehaviour
     private const float WindowVerticalMarginPixels = 32f;
     private readonly Dictionary<string, List<string>> _availableByMain = new();
     private readonly List<TagCategoryButton> _buttons = [];
-    private readonly List<TagCategoryButton> _mainButtons = [];
-    private readonly List<string> _mainCategories = [];
+    private readonly List<string> _categories = [];
     private List<string> _available;
     private CompoundItem _container;
+    private TagCategoryDropdown _dropdown;
+    private TagCategoryButton _dropdownButton;
     private int _generation;
     private bool _layoutApplied;
     private Vector2 _originalRootPosition;
@@ -55,7 +56,7 @@ public sealed class TagCategoryPanelController : MonoBehaviour
         _container = container;
         _available = available;
         _selection = ContainerCategorySettings.GetSelection(container, available);
-        BuildMainCategories();
+        BuildCategories();
 
         int generation = ++_generation;
 
@@ -71,6 +72,7 @@ public sealed class TagCategoryPanelController : MonoBehaviour
     public void Close()
     {
         _generation++;
+        CloseDropdown();
 
         if (_panel != null)
         {
@@ -93,8 +95,7 @@ public sealed class TagCategoryPanelController : MonoBehaviour
 
         _availableByMain.Clear();
         _buttons.Clear();
-        _mainButtons.Clear();
-        _mainCategories.Clear();
+        _categories.Clear();
         _window = null;
         _container = null;
         _selection = null;
@@ -108,13 +109,26 @@ public sealed class TagCategoryPanelController : MonoBehaviour
         _layoutApplied = false;
     }
 
+    private void OnDisable()
+    {
+        Close();
+    }
+
     private IEnumerator BuildAfterLayout(int generation)
     {
         yield return new WaitForEndOfFrame();
 
         if (generation != _generation || _window == null || !_window.gameObject.activeInHierarchy) yield break;
 
-        Build();
+        try
+        {
+            Build();
+        }
+        catch (Exception exception)
+        {
+            Plugin.LogSource?.LogError($"Failed to build tag categories: {exception}");
+            Close();
+        }
     }
 
     private void Build()
@@ -140,23 +154,10 @@ public sealed class TagCategoryPanelController : MonoBehaviour
         float canvasScale = SortTheme.NormalizeScale(canvas != null ? canvas.rootCanvas.scaleFactor : 1f);
         float gridSpacing = SnapToPhysicalPixel(SortTheme.TagCategoryGridSpacing, canvasScale);
         float cellHeight = SnapToPhysicalPixel(SortTheme.TagCategoryCellHeight, canvasScale);
-        float groupDividerHeight = SnapToPhysicalPixel(SortTheme.TagCategoryGroupDividerHeight, canvasScale);
-        float groupDividerMargin = SnapToPhysicalPixel(SortTheme.TagCategoryGroupDividerHorizontalMargin, canvasScale);
-
-        float mainGridHeight = CalculateGridHeight(_mainCategories.Count, cellHeight, gridSpacing);
-        float categoryGridHeight = CalculateGridHeight(_available.Count, cellHeight, gridSpacing);
+        float categoryGridHeight = CalculateGridHeight(_categories.Count, cellHeight, gridSpacing);
         float gridTop = SortTheme.TagCategoryTopPadding + SortTheme.TagCategoryTitleHeight +
                         SortTheme.TagCategorySectionSpacing;
-        float categoryGridTop = gridTop;
-        float groupDividerTop = 0f;
-
-        if (_mainCategories.Count > 0)
-        {
-            groupDividerTop = gridTop + mainGridHeight + SortTheme.TagCategorySectionSpacing;
-            categoryGridTop = groupDividerTop + groupDividerHeight + SortTheme.TagCategorySectionSpacing;
-        }
-
-        float panelHeight = categoryGridTop + categoryGridHeight;
+        float panelHeight = gridTop + categoryGridHeight;
         float extension = panelHeight;
 
         _root.sizeDelta = _originalRootSize + new Vector2(0f, extension);
@@ -206,15 +207,7 @@ public sealed class TagCategoryPanelController : MonoBehaviour
         TMP_FontAsset font = _window._containerTagLabel.font;
 
         MakeHeader(panelRect, font);
-        if (_mainCategories.Count > 0)
-        {
-            MakeCategoryViewport(panelRect, font, "MainCategoryViewport", "MainCategories", _mainCategories,
-                _mainButtons, ToggleMainCategory, gridTop, mainGridHeight, gridSpacing, cellHeight, canvasScale);
-            MakeGroupDivider(panelRect, groupDividerTop, groupDividerHeight, groupDividerMargin);
-        }
-
-        MakeCategoryViewport(panelRect, font, "CategoryViewport", "Categories", _available, _buttons,
-            ToggleCategory, categoryGridTop, categoryGridHeight, gridSpacing, cellHeight, canvasScale);
+        MakeCategoryViewport(panelRect, font, gridTop, categoryGridHeight, gridSpacing, cellHeight, canvasScale);
         RefreshButtons();
 
         Canvas.ForceUpdateCanvases();
@@ -347,26 +340,28 @@ public sealed class TagCategoryPanelController : MonoBehaviour
         return rowCount * cellHeight + Mathf.Max(0, rowCount - 1) * gridSpacing;
     }
 
-    private void BuildMainCategories()
+    private void BuildCategories()
     {
         _availableByMain.Clear();
-        _mainCategories.Clear();
+        _categories.Clear();
+        HashSet<string> available = new HashSet<string>(_available);
 
-        for (int i = 0; i < _available.Count; i++)
+        foreach (string category in CategoryCatalog.GetMainOrder())
         {
-            string category = _available[i];
-            string main = CategoryCatalog.GetMainCategory(category);
-
-            if (!CategoryCatalog.HasChildren(main)) continue;
-
-            if (!_availableByMain.TryGetValue(main, out List<string> children))
+            if (!CategoryCatalog.HasChildren(category))
             {
-                children = [];
-                _availableByMain.Add(main, children);
-                _mainCategories.Add(main);
+                if (available.Contains(category)) _categories.Add(category);
+
+                continue;
             }
 
-            children.Add(category);
+            List<string> children = CategoryCatalog.GetSubOrder(category);
+            children.RemoveAll(child => !available.Contains(child));
+
+            if (children.Count == 0) continue;
+
+            _availableByMain.Add(category, children);
+            _categories.Add(category);
         }
     }
 
@@ -421,6 +416,7 @@ public sealed class TagCategoryPanelController : MonoBehaviour
         tooltip.SetMessageText(ToggleAllTooltip);
         toggleButton.onClick.AddListener(() =>
         {
+            UiSound.Play(EUISoundType.ButtonClick);
             ToggleAll();
             tooltip.Show();
         });
@@ -441,16 +437,15 @@ public sealed class TagCategoryPanelController : MonoBehaviour
         toggleIcon.raycastTarget = false;
     }
 
-    private static void MakeCategoryViewport(RectTransform parent, TMP_FontAsset font, string viewportName,
-        string contentName, IReadOnlyList<string> categories, List<TagCategoryButton> buttons, Action<string> onClick,
+    private void MakeCategoryViewport(RectTransform parent, TMP_FontAsset font,
         float top, float gridHeight, float gridSpacing, float cellHeight, float canvasScale)
     {
-        RectTransform viewport = MakeTopRect(parent, viewportName, top, gridHeight, typeof(Image), typeof(RectMask2D));
+        RectTransform viewport = MakeTopRect(parent, "CategoryViewport", top, gridHeight, typeof(Image), typeof(RectMask2D));
         Image viewportImage = viewport.GetComponent<Image>();
         viewportImage.color = SortTheme.Transparent;
         viewportImage.raycastTarget = true;
 
-        GameObject contentObject = new GameObject(contentName, typeof(RectTransform), typeof(RemainderGridLayoutGroup));
+        GameObject contentObject = new GameObject("Categories", typeof(RectTransform), typeof(RemainderGridLayoutGroup));
         contentObject.transform.SetParent(viewport, false);
         RectTransform content = contentObject.GetComponent<RectTransform>();
         content.anchorMin = new Vector2(0f, 1f);
@@ -476,12 +471,21 @@ public sealed class TagCategoryPanelController : MonoBehaviour
         grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
         grid.childAlignment = TextAnchor.UpperLeft;
 
-        for (int i = 0; i < categories.Count; i++)
+        for (int i = 0; i < _categories.Count; i++)
         {
-            string category = categories[i];
+            string category = _categories[i];
+            bool hasChildren = _availableByMain.ContainsKey(category);
             TagCategoryButton button = TagCategoryButton.Create(content, category, Localization.Get(category), font,
-                onClick);
-            buttons.Add(button);
+                hasChildren ? ToggleMainCategory : ToggleCategory);
+
+            if (hasChildren)
+            {
+                button.AddDropdownButton(() => ToggleDropdown(button, font), canvasScale);
+                HoverTooltipArea tooltip = button.gameObject.AddComponent<HoverTooltipArea>();
+                tooltip.SetMessageText(() => GroupTooltip(category));
+            }
+
+            _buttons.Add(button);
         }
     }
 
@@ -501,16 +505,6 @@ public sealed class TagCategoryPanelController : MonoBehaviour
         rect.sizeDelta = new Vector2(0f, height);
 
         return rect;
-    }
-
-    private static void MakeGroupDivider(RectTransform parent, float top, float height, float horizontalMargin)
-    {
-        RectTransform divider = MakeTopRect(parent, "MainCategoryDivider", top, height, typeof(Image));
-        divider.offsetMin = new Vector2(horizontalMargin, divider.offsetMin.y);
-        divider.offsetMax = new Vector2(-horizontalMargin, divider.offsetMax.y);
-        Image image = divider.GetComponent<Image>();
-        image.color = SortTheme.PanelBorder;
-        image.raycastTarget = false;
     }
 
     private static TextMeshProUGUI MakeText(RectTransform parent, string value, TMP_FontAsset font, float fontSize,
@@ -552,6 +546,8 @@ public sealed class TagCategoryPanelController : MonoBehaviour
 
     private void ToggleCategory(string category)
     {
+        if (_selection == null) return;
+
         if (!_selection.Add(category)) _selection.Remove(category);
 
         RefreshButtons();
@@ -574,21 +570,79 @@ public sealed class TagCategoryPanelController : MonoBehaviour
     private void RefreshButtons()
     {
         foreach (TagCategoryButton button in _buttons)
-            button.SetSelected(_selection != null && _selection.Contains(button.Category));
-
-        foreach (TagCategoryButton button in _mainButtons)
         {
-            bool selected = _selection != null &&
-                            _availableByMain.TryGetValue(button.Category, out List<string> children) &&
-                            children.Count > 0 && _selection.IsSupersetOf(children);
-            button.SetSelected(selected);
+            if (_availableByMain.TryGetValue(button.Category, out List<string> children))
+            {
+                int selectedCount = CountSelected(children);
+                button.SetSelected(selectedCount == children.Count, selectedCount > 0 && selectedCount < children.Count);
+            }
+            else
+            {
+                button.SetSelected(_selection != null && _selection.Contains(button.Category));
+            }
         }
+
+        _dropdown?.Refresh();
+    }
+
+    private int CountSelected(List<string> categories)
+    {
+        if (_selection == null) return 0;
+
+        int count = 0;
+
+        foreach (string category in categories)
+            if (_selection.Contains(category))
+                count++;
+
+        return count;
+    }
+
+    private string GroupTooltip(string category)
+    {
+        if (!_availableByMain.TryGetValue(category, out List<string> children)) return Localization.Get(category);
+
+        return $"{Localization.Get(category)} ({CountSelected(children)}/{children.Count})";
+    }
+
+    private void ToggleDropdown(TagCategoryButton button, TMP_FontAsset font)
+    {
+        bool wasOpen = _dropdownButton == button;
+        CloseDropdown();
+
+        if (wasOpen || _root == null || !_availableByMain.TryGetValue(button.Category, out List<string> children)) return;
+
+        _dropdown = TagCategoryDropdown.Create(_root, button.GetComponent<RectTransform>(), font,
+            Localization.Get(button.Category), children, category => _selection != null && _selection.Contains(category),
+            ToggleCategory, OnDropdownClosed);
+
+        if (_dropdown == null) return;
+
+        _dropdownButton = button;
+        button.SetDropdownOpen(true);
+    }
+
+    private void CloseDropdown()
+    {
+        if (_dropdown != null) _dropdown.Close();
+
+        OnDropdownClosed();
+    }
+
+    private void OnDropdownClosed()
+    {
+        if (_dropdownButton != null) _dropdownButton.SetDropdownOpen(false);
+
+        _dropdownButton = null;
+        _dropdown = null;
     }
 }
 
 public sealed class TagCategoryButton : MonoBehaviour
 {
     private Image _background;
+    private Button _dropdownControl;
+    private TagDropdownArrowGraphic _dropdownArrow;
     private TextMeshProUGUI _label;
     private Action<string> _onClick;
 
@@ -607,16 +661,78 @@ public sealed class TagCategoryButton : MonoBehaviour
         RectTransform rect = buttonObject.GetComponent<RectTransform>();
         result._label = MakeLabel(rect, label, font);
         Button button = buttonObject.GetComponent<Button>();
+        button.targetGraphic = result._background;
         button.transition = Selectable.Transition.None;
         button.onClick.AddListener(result.Click);
 
         return result;
     }
 
-    public void SetSelected(bool selected)
+    public void SetSelected(bool selected, bool partiallySelected = false)
     {
-        _background.color = selected ? SortTheme.CategoryRowBg : SortTheme.CriterionDisabledBg;
-        _label.color = selected ? SortTheme.CategoryText : SortTheme.CriterionDisabledText;
+        _background.color = partiallySelected
+            ? Color.Lerp(SortTheme.CriterionDisabledBg, SortTheme.CategoryRowBg, 0.5f)
+            : selected ? SortTheme.CategoryRowBg : SortTheme.CriterionDisabledBg;
+        _label.color = selected || partiallySelected ? SortTheme.CategoryText : SortTheme.CriterionDisabledText;
+    }
+
+    public void AddDropdownButton(Action onClick, float canvasScale)
+    {
+        PhysicalPixelGrid pixelGrid = new PhysicalPixelGrid(canvasScale);
+        float width = pixelGrid.Snap(SortTheme.TagCategorySubmenuWidth);
+        _label.rectTransform.offsetMax = new Vector2(-SortTheme.TagCategoryTextPadding - width, 0f);
+
+        GameObject buttonObject = new GameObject("Subcategories", typeof(RectTransform), typeof(Image), typeof(Button));
+        buttonObject.transform.SetParent(transform, false);
+        RectTransform rect = buttonObject.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(1f, 0f);
+        rect.anchorMax = Vector2.one;
+        rect.pivot = new Vector2(1f, 0.5f);
+        rect.sizeDelta = new Vector2(width, 0f);
+        rect.anchoredPosition = Vector2.zero;
+        Image background = buttonObject.GetComponent<Image>();
+        background.color = Color.white;
+
+        Button button = buttonObject.GetComponent<Button>();
+        _dropdownControl = button;
+        button.targetGraphic = background;
+        ColorBlock colors = button.colors;
+        colors.normalColor = SortTheme.TagCategoryToggleNormal;
+        colors.highlightedColor = SortTheme.TagCategoryToggleHover;
+        colors.pressedColor = SortTheme.TagCategoryTogglePressed;
+        colors.selectedColor = SortTheme.TagCategoryToggleNormal;
+        colors.colorMultiplier = 1f;
+        colors.fadeDuration = SortTheme.TagCategoryToggleFadeDuration;
+        button.colors = colors;
+        button.onClick.AddListener(() =>
+        {
+            UiSound.Play(EUISoundType.ButtonClick);
+            onClick?.Invoke();
+        });
+
+        GameObject arrowObject = new GameObject("Arrow", typeof(RectTransform), typeof(TagDropdownArrowGraphic));
+        arrowObject.transform.SetParent(rect, false);
+        RectTransform arrowRect = arrowObject.GetComponent<RectTransform>();
+        arrowRect.anchorMin = new Vector2(0.5f, 0.5f);
+        arrowRect.anchorMax = new Vector2(0.5f, 0.5f);
+        arrowRect.pivot = new Vector2(0.5f, 0.5f);
+        arrowRect.sizeDelta = new Vector2(pixelGrid.Snap(SortTheme.HandleWidth * 2f / 3f),
+            pixelGrid.Snap(SortTheme.HandleWidth / 3f));
+        _dropdownArrow = arrowObject.GetComponent<TagDropdownArrowGraphic>();
+        _dropdownArrow.color = SortTheme.CategoryText;
+        _dropdownArrow.raycastTarget = false;
+    }
+
+    public void SetDropdownOpen(bool open)
+    {
+        if (_dropdownArrow != null) _dropdownArrow.SetOpen(open);
+
+        if (_dropdownControl == null) return;
+
+        ColorBlock colors = _dropdownControl.colors;
+        colors.normalColor = open ? SortTheme.RowSubmenuOpen : SortTheme.TagCategoryToggleNormal;
+        colors.selectedColor = colors.normalColor;
+        _dropdownControl.colors = colors;
     }
 
     private static TextMeshProUGUI MakeLabel(RectTransform parent, string value, TMP_FontAsset font)
@@ -633,7 +749,7 @@ public sealed class TagCategoryButton : MonoBehaviour
         label.text = value;
         label.fontSize = SortTheme.TagCategoryCellFontSize;
         label.color = SortTheme.CategoryText;
-        label.alignment = TextAlignmentOptions.Center;
+        label.alignment = TextAlignmentOptions.Left;
         label.enableWordWrapping = false;
         label.overflowMode = TextOverflowModes.Ellipsis;
         label.raycastTarget = false;
@@ -642,6 +758,38 @@ public sealed class TagCategoryButton : MonoBehaviour
 
     private void Click()
     {
+        UiSound.Play(EUISoundType.MenuCheckBox);
         _onClick?.Invoke(Category);
+    }
+}
+
+public sealed class TagDropdownArrowGraphic : MaskableGraphic
+{
+    private bool _open;
+
+    public void SetOpen(bool open)
+    {
+        if (_open == open) return;
+
+        _open = open;
+        SetVerticesDirty();
+    }
+
+    protected override void OnPopulateMesh(VertexHelper vertexHelper)
+    {
+        vertexHelper.Clear();
+
+        Rect rect = rectTransform.rect;
+        float baseY = _open ? rect.yMin : rect.yMax;
+        float tipY = _open ? rect.yMax : rect.yMin;
+        UIVertex vertex = UIVertex.simpleVert;
+        vertex.color = color;
+        vertex.position = new Vector2(rect.xMin, baseY);
+        vertexHelper.AddVert(vertex);
+        vertex.position = new Vector2(rect.xMax, baseY);
+        vertexHelper.AddVert(vertex);
+        vertex.position = new Vector2(rect.center.x, tipY);
+        vertexHelper.AddVert(vertex);
+        vertexHelper.AddTriangle(0, 1, 2);
     }
 }

@@ -62,6 +62,7 @@
         <Reference Include="ItemComponent.Types"/>
         <Reference Include="Unity.TextMeshPro"/>
         <Reference Include="UnityEngine.CoreModule"/>
+        <Reference Include="UnityEngine.InputLegacyModule"/>
         <Reference Include="UnityEngine"/>
         <Reference Include="UnityEngine.UI"/>
         <Reference Include="UnityEngine.UIModule"/>
